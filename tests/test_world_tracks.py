@@ -189,6 +189,22 @@ def test_cli_adjust_json_stays_parseable_when_a_threshold_fires(dcc_world):
     assert len(payload["data"]["fired"]) == 1
 
 
+def test_cli_adjust_unknown_track_emits_error_envelope(dcc_world):
+    proc = _run_cli(dcc_world, "adjust", "Nothing", "--delta", "1", "--json")
+    assert proc.returncode != 0
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is False
+    assert "no such track" in payload["error"]
+
+
+def test_cli_add_malformed_thresholds_json_emits_error_envelope(dcc_world):
+    proc = _run_cli(dcc_world, "add", "X", "5", "--thresholds-json", "{not valid json", "--json")
+    assert proc.returncode != 0
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is False
+    assert "--thresholds-json" in payload["error"]
+
+
 # --- Wrapper-level test (additional requirement, beyond the brief) ---
 #
 # The two CLI tests above invoke lib/world_tracks.py directly via

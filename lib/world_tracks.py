@@ -154,7 +154,12 @@ def main():
 
     m = WorldTrackManager()
     if args.action == "add":
-        thresholds = json.loads(args.thresholds_json) if args.thresholds_json else None
+        thresholds = None
+        if args.thresholds_json:
+            try:
+                thresholds = json.loads(args.thresholds_json)
+            except json.JSONDecodeError as e:
+                sys.exit(emit_error(f"invalid --thresholds-json: {e}", json_mode))
         out = m.add_track(args.name, args.max, thresholds=thresholds,
                           note=args.note, current=args.current)
     elif args.action == "adjust":
