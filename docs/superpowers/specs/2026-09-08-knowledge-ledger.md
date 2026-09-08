@@ -48,13 +48,14 @@ proposition someone believes.
 
 ```
 proposition
-  id          short stable identifier: P + one above the highest existing
-              number, never reused after a proposition is deleted
+  id          P + a monotonically increasing counter stored in the ledger.
+              Ids are never reused. There is no delete verb; a proposition
+              that has served its purpose goes dormant, it does not vanish
   statement   the claim, in plain language
   truth       true | false | unresolved
   about       optional — the entity the statement concerns
   status      active | dormant
-  touched     session number from campaign-overview.json, stamped on every write
+  touched     session number, stamped on every write
 
 stance  (proposition x knower)
   knower      any name: an NPC, a faction, or the player character
@@ -62,6 +63,14 @@ stance  (proposition x knower)
   source      free text — "observed", "told by Eurgain", "overheard at the ford"
   since       session number
 ```
+
+The session number comes from `SessionManager.session_number()`, a public accessor
+this work adds over the existing private `_get_session_number()`, which derives the
+number from matched start/end pairs in `session-log.md`. It does not come from
+`campaign-overview.json`: that file's `session_count` is written once at campaign
+creation and never incremented, so it reads 0 forever. The manager takes the number as
+a parameter rather than reaching for it, which keeps it pure and testable without a
+session log.
 
 **Absence is `unaware`.** No stored record means the entity does not know, and the
 brief renders that. Recording ignorance costs nothing, which matters because
