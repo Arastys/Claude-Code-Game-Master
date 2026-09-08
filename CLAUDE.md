@@ -55,7 +55,6 @@ SWAP (make the chosen character the active PC):
 | "I go to..." (cave/ruin) | Dungeon exploration | `gm-dungeon` |
 | Apply a condition | Conditions | `gm-conditions` |
 | LEVEL_UP / milestone | Progression (kit's model) | `gm-levelup` |
-| Kit declares a signature system (named track / price roll / reaction roll / guarded payoff) | Resolve the primitive, don't narrate it | `gm-system.sh roll "<name>" [args]` |
 | Narrate / voice an NPC | Narration craft | `gm-craft` |
 
 If a skill fails to load, fall back to the matching section in the archived full
@@ -120,6 +119,7 @@ grounded source passages.
 | HP/XP/gold/inventory (PC) | `gm-player.sh` |
 | Spectacle XP (clever/effective/unique/punishing non-kill beat) | `gm-player.sh award [name] --tier minor\|major\|legendary --reason "..."` (kit-aware, level-scaled; co-awards followers in DCC) |
 | Resource-axis progression (years, viewers, spice, ... — kits with no XP/milestone track) | `gm-player.sh advance [name] --amount N` |
+| Roll a signature system the kit declares (ROLL it, never narrate it) | `gm-system.sh list` / `gm-system.sh roll "<name>" [--current N --delta N \| --severity N \| --track-value N] [--modifier N]` |
 | Party NPC stats | `gm-npc.sh` |
 | NPC mood/goal/secret | `gm-npc.sh set-inner` / `mood` |
 | **What an NPC now remembers about the player** (a slight, a kindness, a debt, a lie they caught) | `gm-npc.sh update "<name>" "<event>"` — surfaces back under them in scene context next time they're present |
