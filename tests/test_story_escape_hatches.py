@@ -125,7 +125,7 @@ STYLE = "In the style of a Bayeux-tapestry embroidery but depicting a neon megac
 def _campaign_with_style_and_appearance(dcc_world):
     campaign = Path(dcc_world) / "campaigns" / "dungeon-crawler-carl"
     char_path = campaign / "character.json"
-    char = json.loads(char_path.read_text())
+    char = json.loads(char_path.read_text(encoding="utf-8"))
     char["visual_appearance"] = {
         "sex": "male", "age": "late 20s", "race": "Human", "species": "human",
         "hair": "short brown", "face": "stubbled", "eyes": "brown",

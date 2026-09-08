@@ -94,7 +94,7 @@ class WorldStats:
         # Sessions
         session_log = self.world_state_dir / "session-log.md"
         if session_log.exists():
-            content = session_log.read_text()
+            content = session_log.read_text(encoding="utf-8")
             counts["sessions"] = content.count("Session Started:")
 
         return counts

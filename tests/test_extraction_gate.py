@@ -171,7 +171,7 @@ def test_normalize_command_flattens_a_list_into_the_campaign_root(tmp_path, pinn
     result = run(script, "normalize", "fixture")
     assert result.returncode == 0, result.stdout + result.stderr
 
-    written = json.loads((pinned_world_state / "campaigns" / "fixture" / "items.json").read_text())
+    written = json.loads((pinned_world_state / "campaigns" / "fixture" / "items.json").read_text(encoding="utf-8"))
     assert len(written) == 43
     assert written["Item 0"]["type"] == "wondrous"
 

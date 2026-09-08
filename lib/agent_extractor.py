@@ -261,7 +261,7 @@ class AgentExtractor:
         # Load metadata
         metadata_path = self.extraction_dir / "metadata.json"
         if metadata_path.exists():
-            metadata = json.loads(metadata_path.read_text())
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         else:
             metadata = {"document_name": "unknown", "extraction_date": datetime.now().isoformat()}
 
@@ -286,7 +286,7 @@ class AgentExtractor:
 
         for agent_file in agent_files:
             try:
-                data = json.loads(agent_file.read_text())
+                data = json.loads(agent_file.read_text(encoding="utf-8"))
 
                 # Determine if this is a direct file (npcs.json) vs wrapped (agent-npcs.json)
                 # Direct files from agents are just {id: {...}, id2: {...}}
@@ -544,7 +544,7 @@ class AgentExtractor:
         if not merged_path.exists():
             return {"error": "No merged results found. Run merge first."}
 
-        data = json.loads(merged_path.read_text())
+        data = json.loads(merged_path.read_text(encoding="utf-8"))
 
         review = {
             "source": data.get('metadata', {}).get('document_name', 'unknown'),
@@ -719,7 +719,7 @@ def main():
         merged_path = extractor.extraction_dir / "merged-results.json"
 
         if merged_path.exists():
-            data = json.loads(merged_path.read_text())
+            data = json.loads(merged_path.read_text(encoding="utf-8"))
             result = extractor.validate_and_save(data, conflict_strategy=strategy)
             print(f"\nSave complete: {result}")
         else:

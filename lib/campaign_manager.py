@@ -161,7 +161,7 @@ class CampaignManager:
             return None
 
         try:
-            campaign_name = self.active_file.read_text().strip()
+            campaign_name = self.active_file.read_text(encoding="utf-8").strip()
             # Verify the campaign actually exists
             campaign_path = self.campaigns_dir / campaign_name
             if campaign_path.is_dir():

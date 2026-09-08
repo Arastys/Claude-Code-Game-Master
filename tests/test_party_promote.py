@@ -14,7 +14,7 @@ def _world(tmp_path, npcs):
 
 
 def _sheet(world, name):
-    npcs = json.loads((world / "campaigns" / "camp" / "npcs.json").read_text())
+    npcs = json.loads((world / "campaigns" / "camp" / "npcs.json").read_text(encoding="utf-8"))
     return npcs[name]["character_sheet"]
 
 

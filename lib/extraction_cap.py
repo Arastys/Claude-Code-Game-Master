@@ -148,7 +148,7 @@ def cap_campaign(campaign_dir, limit: int = DEFAULT_LIMIT) -> dict:
     cdir = Path(campaign_dir)
     corpus = load_corpus(cdir / "chunks")
     plots_path = cdir / "plots.json"
-    plots = json.loads(plots_path.read_text()) if plots_path.exists() else {}
+    plots = json.loads(plots_path.read_text(encoding="utf-8")) if plots_path.exists() else {}
     plot_refs = plot_reference_names(plots)
 
     report = {}
@@ -156,7 +156,7 @@ def cap_campaign(campaign_dir, limit: int = DEFAULT_LIMIT) -> dict:
         path = cdir / f"{type_name}.json"
         if not path.exists():
             continue
-        entities = json.loads(path.read_text())
+        entities = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(entities, dict):
             continue
         entities, background = cap_type(entities, type_name, corpus, plot_refs, limit)

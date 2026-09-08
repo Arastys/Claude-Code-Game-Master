@@ -21,7 +21,7 @@ def _campaign_dir(world):
 
 
 def _current_location(world):
-    overview = json.loads((_campaign_dir(world) / "campaign-overview.json").read_text())
+    overview = json.loads((_campaign_dir(world) / "campaign-overview.json").read_text(encoding="utf-8"))
     return overview.get("player_position", {}).get("current_location")
 
 

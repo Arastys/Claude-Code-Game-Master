@@ -54,7 +54,7 @@ def test_run_fixup_writes(tmp_path):
         "Big Box": {"type": "wondrous", "name": "Gold Box", "description": "a loot box"},
     }))
     r = run_fixup(str(tmp_path))
-    saved = json.loads((tmp_path / "items.json").read_text())
+    saved = json.loads((tmp_path / "items.json").read_text(encoding="utf-8"))
     assert saved["Crossbow"]["cursed"] is False
     assert saved["Big Box"]["type"] == "lootbox"
     assert "Crossbow" in r["cursed_cleared"]

@@ -15,13 +15,13 @@ from lib.world_kit import WorldKit
 
 def _ruleset_path(world_dir: str) -> Path:
     base = Path(world_dir)
-    active = (base / "active-campaign.txt").read_text().strip()
+    active = (base / "active-campaign.txt").read_text(encoding="utf-8").strip()
     return base / "campaigns" / active / "ruleset.json"
 
 
 def _set_systems(world_dir: str, systems) -> None:
     p = _ruleset_path(world_dir)
-    rs = json.loads(p.read_text()) if p.exists() else {}
+    rs = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
     rs["systems"] = systems
     p.write_text(json.dumps(rs))
 
@@ -58,7 +58,7 @@ def test_no_systems_no_block(dcc_world):
 
 def test_write_systems_roundtrips_and_drops_malformed(dcc_world):
     from lib import book_bible
-    active = (Path(dcc_world) / "active-campaign.txt").read_text().strip()
+    active = (Path(dcc_world) / "active-campaign.txt").read_text(encoding="utf-8").strip()
     cdir = str(Path(dcc_world) / "campaigns" / active)
     book_bible.write_systems(cdir, [
         {"primitive": "named_track", "name": "Dread", "config": {"max": 4}},

@@ -42,9 +42,9 @@ def test_none_never_instant_kills():
 
 def test_worldkit_lethality_default_and_override(dcc_world):
     assert WorldKit(dcc_world).lethality() == {"model": "death-saves"}, "absent -> 5e default"
-    active = (Path(dcc_world) / "active-campaign.txt").read_text().strip()
+    active = (Path(dcc_world) / "active-campaign.txt").read_text(encoding="utf-8").strip()
     p = Path(dcc_world) / "campaigns" / active / "ruleset.json"
-    rs = json.loads(p.read_text())
+    rs = json.loads(p.read_text(encoding="utf-8"))
     rs["lethality"] = {"model": "gritty", "massive_damage_at": 10}
     p.write_text(json.dumps(rs))
     assert WorldKit(dcc_world).lethality() == {"model": "gritty", "massive_damage_at": 10}

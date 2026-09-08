@@ -49,7 +49,7 @@ def test_run_enrich_writes(tmp_path):
         "Shopkeep": {"name": "Shopkeep", "attitude": "friendly", "stats": {}},
     }))
     r = run_enrich(str(tmp_path))
-    saved = json.loads((tmp_path / "npcs.json").read_text())
+    saved = json.loads((tmp_path / "npcs.json").read_text(encoding="utf-8"))
     assert saved["Hekla"]["stats"]["hp"]
     assert saved["Shopkeep"]["stats"]["statless"] is True
     assert "Hekla" in r["combat"]

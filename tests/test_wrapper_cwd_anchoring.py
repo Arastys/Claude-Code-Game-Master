@@ -41,7 +41,7 @@ def _live_campaign():
     is skipped rather than allowed to create one."""
     if not LIVE_ACTIVE_FILE.exists():
         return None
-    name = LIVE_ACTIVE_FILE.read_text().strip()
+    name = LIVE_ACTIVE_FILE.read_text(encoding="utf-8").strip()
     return name if name and (PROJECT_ROOT / "world-state" / "campaigns" / name).is_dir() else None
 
 
@@ -155,7 +155,7 @@ def test_gm_time_persists_to_the_pinned_campaign_from_a_foreign_cwd(active_fixtu
     result = _run_from(foreign_cwd, "tools/gm-time.sh", "Dusk", "Day of Ash")
     assert result.returncode == 0, result.stdout + result.stderr
 
-    overview = json.loads((active_fixture_campaign / "campaign-overview.json").read_text())
+    overview = json.loads((active_fixture_campaign / "campaign-overview.json").read_text(encoding="utf-8"))
     assert overview["time_of_day"] == "Dusk"
     assert not (foreign_cwd / "world-state").exists()
 

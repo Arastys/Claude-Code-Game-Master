@@ -565,7 +565,7 @@ class SessionManager(EntityManager):
         if not self.session_log.exists():
             return []
 
-        content = self.session_log.read_text()
+        content = self.session_log.read_text(encoding="utf-8")
         lines = content.split('\n')
 
         # Extract session entries
@@ -1451,7 +1451,7 @@ class SessionManager(EntityManager):
         """
         if not self.session_log.exists():
             return 0
-        content = self.session_log.read_text()
+        content = self.session_log.read_text(encoding="utf-8")
         ended = content.count('### Session Ended:')
         started = content.count('## Session Started:')
         return ended + (1 if started > ended else 0)

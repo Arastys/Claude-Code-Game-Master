@@ -51,7 +51,7 @@ def test_stage_then_materialize_yields_one_record(tmp_path):
     stage = apply_stage(cdir)
     assert stage["ok"] is True
     # Stage created the descriptive stub keyed by its full string.
-    npcs = json.loads((cdir / "npcs.json").read_text())
+    npcs = json.loads((cdir / "npcs.json").read_text(encoding="utf-8"))
     assert list(npcs) == [ARATUS_LONG]
     assert npcs[ARATUS_LONG]["tags"]["locations"] == ["The Bedchamber"]
 
@@ -61,7 +61,7 @@ def test_stage_then_materialize_yields_one_record(tmp_path):
     assert result["ok"] is True
     assert result["name"] == "Aratus"
 
-    npcs = json.loads((cdir / "npcs.json").read_text())
+    npcs = json.loads((cdir / "npcs.json").read_text(encoding="utf-8"))
     # ONE record, keyed on the canonical short name.
     assert list(npcs) == ["Aratus"]
     rec = npcs["Aratus"]
@@ -82,7 +82,7 @@ def test_materialize_then_stage_yields_one_record(tmp_path):
     save_pack(cdir, {"room": "The Bedchamber", "present": [ARATUS_LONG]})
     apply_stage(cdir)
 
-    npcs = json.loads((cdir / "npcs.json").read_text())
+    npcs = json.loads((cdir / "npcs.json").read_text(encoding="utf-8"))
     assert list(npcs) == ["Aratus"]
     assert ARATUS_LONG in npcs["Aratus"].get("aliases", [])
     assert npcs["Aratus"]["tags"]["locations"] == ["The Bedchamber"]
@@ -97,7 +97,7 @@ def test_descriptive_materialize_reuses_short_existing_key(tmp_path):
     assert result["ok"] is True
     assert result["name"] == "Aratus"
 
-    npcs = json.loads((cdir / "npcs.json").read_text())
+    npcs = json.loads((cdir / "npcs.json").read_text(encoding="utf-8"))
     assert list(npcs) == ["Aratus"]
     assert ARATUS_LONG in npcs["Aratus"].get("aliases", [])
     # A real description is never clobbered by the stub materialize.
@@ -113,7 +113,7 @@ def test_different_name_still_creates_its_own_record(tmp_path):
     assert result["ok"] is True
     assert result["name"] == "Yara"
 
-    npcs = json.loads((cdir / "npcs.json").read_text())
+    npcs = json.loads((cdir / "npcs.json").read_text(encoding="utf-8"))
     assert set(npcs) == {ARATUS_LONG, "Yara"}
 
 
@@ -141,7 +141,7 @@ def test_short_name_never_corrupts_fleshed_longer_named_npc(tmp_path):
     # A DISTINCT record keyed on the short name — NOT re-keyed onto the fleshed one.
     assert result["name"] == "Aram"
 
-    npcs = json.loads((cdir / "npcs.json").read_text())
+    npcs = json.loads((cdir / "npcs.json").read_text(encoding="utf-8"))
     assert set(npcs) == {"Aram", "Aram Baksh"}
 
     # The fleshed record survived un-renamed, description / tags / events intact.

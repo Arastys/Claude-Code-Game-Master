@@ -91,7 +91,7 @@ def fix_items(items: dict) -> dict:
 
 def run_fixup(campaign_dir) -> dict:
     path = Path(campaign_dir) / "items.json"
-    items = json.loads(path.read_text()) if path.exists() else {}
+    items = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     report = fix_items(items)
     if items:
         path.write_text(json.dumps(items, indent=2))

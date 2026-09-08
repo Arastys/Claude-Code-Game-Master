@@ -56,7 +56,7 @@ def test_save_pack_sets_position_and_does_not_fake_a_session(tmp_path):
     save_pack(cdir, {"room": "The Maul", "hook": "A knife in the dark."})
     pack = load_pack(cdir)
     assert pack["room"] == "The Maul"
-    overview = json.loads((cdir / "campaign-overview.json").read_text())
+    overview = json.loads((cdir / "campaign-overview.json").read_text(encoding="utf-8"))
     assert overview["player_position"]["current_location"] == "The Maul"
     assert overview["opening_hook"]["hook"] == "A knife in the dark."
     assert not (cdir / "session-log.md").exists()
@@ -69,7 +69,7 @@ def test_pack_closes_reseed_latch(tmp_path):
     onto a mid-campaign plot's location."""
     cdir = _campaign(tmp_path)
     save_pack(cdir, {"room": "The Tigress", "hook": "A sail on the horizon."})
-    overview = json.loads((cdir / "campaign-overview.json").read_text())
+    overview = json.loads((cdir / "campaign-overview.json").read_text(encoding="utf-8"))
     assert overview["opening_matched_to_pc"] is True
 
 
@@ -108,8 +108,8 @@ def test_stage_writes_room_people_exits_only(tmp_path):
     })
     result = apply_stage(cdir)
     assert result["ok"] is True
-    locs = json.loads((cdir / "locations.json").read_text())
-    npcs = json.loads((cdir / "npcs.json").read_text())
+    locs = json.loads((cdir / "locations.json").read_text(encoding="utf-8"))
+    npcs = json.loads((cdir / "npcs.json").read_text(encoding="utf-8"))
     assert set(locs) == {"The Bedchamber", "the corridor"}
     assert set(npcs) == {"Ascalante"}
     assert npcs["Ascalante"]["tags"]["locations"] == ["The Bedchamber"]
@@ -123,12 +123,12 @@ def test_from_book_writes_one_npc(tmp_path):
     cdir = _campaign(tmp_path)
     r = from_book(cdir, "Valeria", kind="npc", description="A sheathed sword and a hard grin.")
     assert r == {"ok": True, "kind": "npc", "name": "Valeria"}
-    npcs = json.loads((cdir / "npcs.json").read_text())
+    npcs = json.loads((cdir / "npcs.json").read_text(encoding="utf-8"))
     assert list(npcs) == ["Valeria"]
     assert "hard grin" in npcs["Valeria"]["description"]
     again = from_book(cdir, "Valeria", kind="npc", description="nope")
     assert again["ok"] is False
-    assert list(json.loads((cdir / "npcs.json").read_text())) == ["Valeria"]
+    assert list(json.loads((cdir / "npcs.json").read_text(encoding="utf-8"))) == ["Valeria"]
 
 
 def test_from_book_writes_one_location(tmp_path):
@@ -136,5 +136,5 @@ def test_from_book_writes_one_location(tmp_path):
     r = from_book(cdir, "The Tower of the Elephant", kind="location",
                   description="A spire over Arenjun.")
     assert r["ok"] is True
-    locs = json.loads((cdir / "locations.json").read_text())
+    locs = json.loads((cdir / "locations.json").read_text(encoding="utf-8"))
     assert list(locs) == ["The Tower of the Elephant"]

@@ -80,7 +80,7 @@ def enrich(npcs: dict) -> dict:
 
 def run_enrich(campaign_dir) -> dict:
     path = Path(campaign_dir) / "npcs.json"
-    npcs = json.loads(path.read_text()) if path.exists() else {}
+    npcs = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     report = enrich(npcs)
     if npcs:
         path.write_text(json.dumps(npcs, indent=2))

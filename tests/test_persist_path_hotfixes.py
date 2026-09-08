@@ -71,7 +71,7 @@ def _live_campaign_with_facts():
     writes nothing at all."""
     if not LIVE_ACTIVE_FILE.exists():
         return None
-    name = LIVE_ACTIVE_FILE.read_text().strip()
+    name = LIVE_ACTIVE_FILE.read_text(encoding="utf-8").strip()
     campaign = PROJECT_ROOT / "world-state" / "campaigns" / name
     return campaign if name and (campaign / "facts.json").exists() else None
 
@@ -93,7 +93,7 @@ def test_wrapper_runs_from_foreign_cwd(active_fixture_campaign, foreign_cwd, arg
 
 def test_gm_time_persists_to_the_campaign_from_foreign_cwd(active_fixture_campaign, foreign_cwd):
     assert _run_from(foreign_cwd, "tools/gm-time.sh", "Dusk", "Day of Ash").returncode == 0
-    overview = json.loads((active_fixture_campaign / "campaign-overview.json").read_text())
+    overview = json.loads((active_fixture_campaign / "campaign-overview.json").read_text(encoding="utf-8"))
     assert overview["time_of_day"] == "Dusk"
     assert overview["current_date"] == "Day of Ash"
 
@@ -193,7 +193,7 @@ def test_get_xp_status_does_not_write(dcc_world):
 
     # Legacy plain-integer XP: the shape `_xp_view` expands in memory only, so a
     # status call that still saved would rewrite the file.
-    char = json.loads(character_file.read_text())
+    char = json.loads(character_file.read_text(encoding="utf-8"))
     char["xp"] = 7315
     character_file.write_text(json.dumps(char, indent=2))
     before = hashlib.sha256(character_file.read_bytes()).hexdigest()

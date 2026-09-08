@@ -115,7 +115,7 @@ def run_gate(campaign_dir, strict: bool = True) -> dict:
 
     def _load(name):
         p = cdir / name
-        return json.loads(p.read_text()) if p.exists() else {}
+        return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
 
     npcs, locations, plots = _load("npcs.json"), _load("locations.json"), _load("plots.json")
     report = canonicalize(npcs, locations, plots)

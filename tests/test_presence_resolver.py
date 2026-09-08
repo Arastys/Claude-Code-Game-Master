@@ -111,7 +111,7 @@ def test_tag_search_stays_substring_discovery(presence_world):
     assert "Voss" in hits                      # substring: Inn ⊂ Inner Sanctum
     assert "Pip" not in hits                   # party is presence, not tag-search
     npcs = json.loads(
-        (Path(presence_world) / "campaigns" / "presence-camp" / "npcs.json").read_text()
+        (Path(presence_world) / "campaigns" / "presence-camp" / "npcs.json").read_text(encoding="utf-8")
     )
     assert "Voss" not in npcs_present(npcs, LOC)
 

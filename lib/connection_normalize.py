@@ -101,7 +101,7 @@ def normalize_connections(locations: dict) -> dict:
 
 def run_normalize(campaign_dir) -> dict:
     path = Path(campaign_dir) / "locations.json"
-    locations = json.loads(path.read_text()) if path.exists() else {}
+    locations = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     report = normalize_connections(locations)
     if locations:
         path.write_text(json.dumps(locations, indent=2))

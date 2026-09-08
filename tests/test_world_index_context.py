@@ -16,13 +16,13 @@ from lib.world_bible import validate_bible
 
 def _bible_path(world_dir: str) -> Path:
     base = Path(world_dir)
-    active = (base / "active-campaign.txt").read_text().strip()
+    active = (base / "active-campaign.txt").read_text(encoding="utf-8").strip()
     return base / "campaigns" / active / "world-bible.json"
 
 
 def _write_index(world_dir: str, index) -> None:
     p = _bible_path(world_dir)
-    bible = json.loads(p.read_text()) if p.exists() else {}
+    bible = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
     bible["index"] = index
     p.write_text(json.dumps(bible))
 
@@ -49,7 +49,7 @@ def test_empty_index_emits_no_header(dcc_world):
 def test_absent_index_emits_no_header(dcc_world):
     p = _bible_path(dcc_world)
     if p.exists():
-        bible = json.loads(p.read_text())
+        bible = json.loads(p.read_text(encoding="utf-8"))
         bible.pop("index", None)
         p.write_text(json.dumps(bible))
     assert "WORLD INDEX" not in SessionManager(dcc_world).get_full_context()

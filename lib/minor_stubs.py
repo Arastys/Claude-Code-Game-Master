@@ -200,7 +200,7 @@ def run_stubs(campaign_dir) -> dict:
 
     def _load(name):
         p = cdir / name
-        return json.loads(p.read_text()) if p.exists() else {}
+        return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
 
     npcs, plots = _load("npcs.json"), _load("plots.json")
     npc_report = stub_missing_npcs(npcs, plots)

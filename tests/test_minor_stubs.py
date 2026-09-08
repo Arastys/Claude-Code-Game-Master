@@ -64,8 +64,8 @@ def test_run_stubs_makes_all_plot_npcs_resolve(tmp_path):
     (tmp_path / "npcs.json").write_text(json.dumps({"Carl": {}}))
     (tmp_path / "plots.json").write_text(json.dumps({"P": {"npcs": ["Carl", "Elle McGib"], "type": "main"}}))
     run_stubs(str(tmp_path))
-    npcs = json.loads((tmp_path / "npcs.json").read_text())
-    plots = json.loads((tmp_path / "plots.json").read_text())
+    npcs = json.loads((tmp_path / "npcs.json").read_text(encoding="utf-8"))
+    plots = json.loads((tmp_path / "plots.json").read_text(encoding="utf-8"))
     # every plot.npcs ref now exists as a key
     for ref in plots["P"]["npcs"]:
         assert ref in npcs

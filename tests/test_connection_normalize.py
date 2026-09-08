@@ -43,6 +43,6 @@ def test_run_normalize_writes(tmp_path):
         "A": {"connections": [{"to": "Any line"}]},
     }))
     run_normalize(str(tmp_path))
-    saved = json.loads((tmp_path / "locations.json").read_text())
+    saved = json.loads((tmp_path / "locations.json").read_text(encoding="utf-8"))
     assert saved["A"]["connections"] == []
     assert "Any line" in saved["A"]["notes"]

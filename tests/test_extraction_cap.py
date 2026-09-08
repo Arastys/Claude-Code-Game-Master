@@ -74,7 +74,7 @@ def test_cap_campaign_writes_tiered_files(tmp_path):
     (cdir / "npcs.json").write_text(json.dumps(npcs))
     (cdir / "plots.json").write_text(json.dumps({"P": {"type": "main", "npcs": ["Carl"]}}))
     report = cap_campaign(str(cdir), limit=30)
-    saved = json.loads((cdir / "npcs.json").read_text())
+    saved = json.loads((cdir / "npcs.json").read_text(encoding="utf-8"))
     assert len(saved) == 51                      # every extracted NPC still on disk
     assert saved["Carl"].get("background") is None  # plot-referenced -> active
     assert report["npcs"]["active"] == 30

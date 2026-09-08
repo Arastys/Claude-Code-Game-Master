@@ -55,7 +55,7 @@ def test_clean_refs_pass_strict_and_persist(tmp_path):
     (tmp_path / "npcs.json").write_text(json.dumps({"Donut": {}}))
     (tmp_path / "plots.json").write_text(json.dumps({"P": {"npcs": ["Princess Donut"], "locations": []}}))
     report = run_gate(str(tmp_path), strict=True)  # must NOT raise: Princess Donut resolves
-    saved = json.loads((tmp_path / "plots.json").read_text())
+    saved = json.loads((tmp_path / "plots.json").read_text(encoding="utf-8"))
     assert saved["P"]["npcs"] == ["Donut"]
     assert report["unresolved"] == []
     assert report["near_duplicates"] == []

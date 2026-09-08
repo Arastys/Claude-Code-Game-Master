@@ -248,7 +248,7 @@ def test_legacy_campaign_directory_is_reachable_from_extract_verbs(tmp_path):
         cwd=tmp_path, env=env, capture_output=True, text=True, timeout=120,
     )
     assert switched.returncode == 0, switched.stdout + switched.stderr
-    assert (tmp_path / "world-state" / "active-campaign.txt").read_text() == "curse_of_strahd"
+    assert (tmp_path / "world-state" / "active-campaign.txt").read_text(encoding="utf-8") == "curse_of_strahd"
 
     result = subprocess.run(
         ["bash", str(script), "normalize"],

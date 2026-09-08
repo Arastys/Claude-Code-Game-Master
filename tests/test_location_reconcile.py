@@ -64,7 +64,7 @@ def test_run_reconcile_writes_files(tmp_path):
     (tmp_path / "locations.json").write_text(json.dumps({"Hub": {"connections": []}}))
     (tmp_path / "plots.json").write_text(json.dumps({"P": {"locations": ["Station 72"]}}))
     report = run_reconcile(str(tmp_path))
-    saved = json.loads((tmp_path / "locations.json").read_text())
+    saved = json.loads((tmp_path / "locations.json").read_text(encoding="utf-8"))
     assert "Station 72" in saved
     assert report["stubbed"] == ["Station 72"]
 

@@ -19,7 +19,7 @@ def seed_overview(campaign_dir, fields: dict = None, campaign_rules: dict = None
     provided (player_position, session_count, etc. are preserved otherwise).
     """
     path = Path(campaign_dir) / "campaign-overview.json"
-    overview = json.loads(path.read_text()) if path.exists() else {}
+    overview = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     if fields:
         overview.update(fields)
     if campaign_rules is not None:
@@ -37,7 +37,7 @@ def fix_rules_doc(campaign_dir) -> dict:
     path = cdir / "ruleset.json"
     if not path.exists():
         return {"rules_doc": None, "changed": False}
-    ruleset = json.loads(path.read_text())
+    ruleset = json.loads(path.read_text(encoding="utf-8"))
     doc = ruleset.get("rules_doc")
     if doc and not (cdir / doc).exists():
         ruleset["rules_doc"] = None
@@ -55,7 +55,7 @@ def set_rules_doc(campaign_dir, filename: str = "rules.md") -> dict:
     rs_path = cdir / "ruleset.json"
     if not rs_path.exists() or not (cdir / filename).exists():
         return {"rules_doc": None, "changed": False}
-    ruleset = json.loads(rs_path.read_text())
+    ruleset = json.loads(rs_path.read_text(encoding="utf-8"))
     changed = ruleset.get("rules_doc") != filename
     ruleset["rules_doc"] = filename
     rs_path.write_text(json.dumps(ruleset, indent=2))

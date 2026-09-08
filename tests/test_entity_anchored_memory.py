@@ -17,7 +17,7 @@ from lib.session_manager import SessionManager
 
 
 def _load(world, name):
-    return json.loads((Path(world) / "campaigns" / "dungeon-crawler-carl" / name).read_text())
+    return json.loads((Path(world) / "campaigns" / "dungeon-crawler-carl" / name).read_text(encoding="utf-8"))
 
 
 def _save(world, name, data):

@@ -68,7 +68,7 @@ def _opening_location(first_plot: dict, locations: dict):
 
 def _load(cdir: Path, name: str):
     p = cdir / name
-    return json.loads(p.read_text()) if p.exists() else {}
+    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
 
 
 def _spine_names(overview: dict, plots: dict) -> list:

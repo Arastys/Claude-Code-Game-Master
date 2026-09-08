@@ -38,11 +38,20 @@ def test_action_menu_off_changes_play_style_line(dcc_world):
     assert "action menu ON" not in ctx
 
 
-def test_action_menu_on_is_a_few_numbered_not_exactly_three(dcc_world):
+def test_action_menu_on_names_exactly_three_numbered_options(dcc_world):
+    """The brief must state the option count CLAUDE.md mandates.
+
+    This test previously asserted "a few numbered" and forbade an exact count —
+    guarding a design that was later reversed. CLAUDE.md is the operative spec and
+    says "exactly THREE numbered options followed by a final 'Or something
+    else...' line", so the brief saying anything vaguer is the defect. The old
+    `"exactly 3" not in ctx` assertion passed only because the code spells the
+    number as a word, so it guarded nothing while its premise was inverted.
+    """
     ctx = _context(dcc_world)
     assert "action menu ON" in ctx
-    assert "a few numbered" in ctx
-    assert "exactly 3" not in ctx
+    assert "exactly THREE numbered" in ctx
+    assert "Or something else" in ctx
 
 
 def test_choices_on_confirmation_has_no_digit_option_count(dcc_world, capsys, monkeypatch):

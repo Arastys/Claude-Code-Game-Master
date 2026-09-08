@@ -100,7 +100,7 @@ def test_session_unknown_action_names_every_dispatched_verb(no_active_campaign):
     """The guard's verb list and the message a typo gets are one variable, and
     every verb in it has a branch to reach — an omission here is how a real verb
     starts reporting itself as unknown."""
-    script = (PROJECT_ROOT / "tools" / "gm-session.sh").read_text()
+    script = (PROJECT_ROOT / "tools" / "gm-session.sh").read_text(encoding="utf-8")
     declared = script.split('VALID_ACTIONS="', 1)[1].split('"', 1)[0].split()
     assert declared, "VALID_ACTIONS no longer parses"
 

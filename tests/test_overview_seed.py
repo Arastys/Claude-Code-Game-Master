@@ -14,7 +14,7 @@ def test_seed_sets_fields_and_campaign_rules_preserving_others(tmp_path):
         fields={"campaign_name": "The Iron Tangle", "genre": "LitRPG / Comedy-Horror"},
         campaign_rules={"loot_boxes": "open at saferooms"},
     )
-    o = json.loads((tmp_path / "campaign-overview.json").read_text())
+    o = json.loads((tmp_path / "campaign-overview.json").read_text(encoding="utf-8"))
     assert o["campaign_name"] == "The Iron Tangle"
     assert o["genre"] == "LitRPG / Comedy-Horror"
     assert o["campaign_rules"]["loot_boxes"] == "open at saferooms"
@@ -29,7 +29,7 @@ def test_fix_rules_doc_nulls_dangling_pointer(tmp_path):
     r = fix_rules_doc(str(tmp_path))
     assert r["changed"] is True
     assert r["rules_doc"] is None
-    assert json.loads((tmp_path / "ruleset.json").read_text())["rules_doc"] is None
+    assert json.loads((tmp_path / "ruleset.json").read_text(encoding="utf-8"))["rules_doc"] is None
 
 
 def test_fix_rules_doc_leaves_valid_pointer(tmp_path):
@@ -43,5 +43,5 @@ def test_fix_rules_doc_leaves_valid_pointer(tmp_path):
 def test_campaign_rules_readable_by_worldkit_shape(tmp_path):
     # WorldKit.campaign_rules() does overview.get("campaign_rules", {}) — ensure shape.
     seed_overview(str(tmp_path), fields={"campaign_name": "T"}, campaign_rules={"viewers": "currency"})
-    o = json.loads((tmp_path / "campaign-overview.json").read_text())
+    o = json.loads((tmp_path / "campaign-overview.json").read_text(encoding="utf-8"))
     assert o.get("campaign_rules", {}).get("viewers") == "currency"

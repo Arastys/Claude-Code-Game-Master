@@ -12,7 +12,7 @@ from lib.plot_manager import PlotManager
 
 
 def _plots(world_dir):
-    active = (Path(world_dir) / "active-campaign.txt").read_text().strip()
+    active = (Path(world_dir) / "active-campaign.txt").read_text(encoding="utf-8").strip()
     return Path(world_dir) / "campaigns" / active / "plots.json"
 
 

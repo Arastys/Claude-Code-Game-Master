@@ -91,7 +91,7 @@ def test_onboard_reseeds_opening_without_a_separate_set(isolated_world_state):
     )
     assert result["success"]
 
-    ov = json.loads((cdir / "campaign-overview.json").read_text())
+    ov = json.loads((cdir / "campaign-overview.json").read_text(encoding="utf-8"))
     assert ov["current_character"] == "Conan"
     assert ov.get("opening_matched_to_pc") is True
     assert ov["player_position"]["current_location"] == "The Tigress"
@@ -104,7 +104,7 @@ def test_onboard_reseeds_opening_without_a_separate_set(isolated_world_state):
     ov["player_position"]["current_location"] = "WRONG"
     (cdir / "campaign-overview.json").write_text(json.dumps(ov), encoding="utf-8")
     assert PlayerManager().set_current_player("Conan")
-    ov = json.loads((cdir / "campaign-overview.json").read_text())
+    ov = json.loads((cdir / "campaign-overview.json").read_text(encoding="utf-8"))
     assert ov["player_position"]["current_location"] == "WRONG"
 
 
@@ -123,10 +123,10 @@ def test_onboard_replace_does_not_reseed_when_opening_already_matched(isolated_w
     )
     assert first["success"]
 
-    ov = json.loads((cdir / "campaign-overview.json").read_text())
+    ov = json.loads((cdir / "campaign-overview.json").read_text(encoding="utf-8"))
     assert ov.get("opening_matched_to_pc") is True
-    plots_before = json.loads((cdir / "plots.json").read_text())
-    log_before = (cdir / "session-log.md").read_text()
+    plots_before = json.loads((cdir / "plots.json").read_text(encoding="utf-8"))
+    log_before = (cdir / "session-log.md").read_text(encoding="utf-8")
 
     ov["player_position"]["current_location"] = "WRONG"
     (cdir / "campaign-overview.json").write_text(json.dumps(ov), encoding="utf-8")
@@ -136,9 +136,9 @@ def test_onboard_replace_does_not_reseed_when_opening_already_matched(isolated_w
     )
     assert result["success"]
 
-    ov = json.loads((cdir / "campaign-overview.json").read_text())
-    plots = json.loads((cdir / "plots.json").read_text())
-    log = (cdir / "session-log.md").read_text()
+    ov = json.loads((cdir / "campaign-overview.json").read_text(encoding="utf-8"))
+    plots = json.loads((cdir / "plots.json").read_text(encoding="utf-8"))
+    log = (cdir / "session-log.md").read_text(encoding="utf-8")
     assert ov["current_character"] == "Valeria"
     assert ov.get("opening_matched_to_pc") is True
     assert ov["player_position"]["current_location"] == "WRONG"

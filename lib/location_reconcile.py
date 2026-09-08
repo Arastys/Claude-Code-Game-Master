@@ -174,7 +174,7 @@ def _persist_dropped(cdir: Path, dropped: list):
     if not dropped:
         return
     path = cdir / "facts.json"
-    facts = json.loads(path.read_text()) if path.exists() else {}
+    facts = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     if not isinstance(facts, dict):
         return
     bucket = facts.setdefault(FACT_CATEGORY, [])
@@ -194,7 +194,7 @@ def run_reconcile(campaign_dir) -> dict:
 
     def _load(name):
         p = cdir / name
-        return json.loads(p.read_text()) if p.exists() else {}
+        return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
 
     npcs, locations, plots = _load("npcs.json"), _load("locations.json"), _load("plots.json")
 

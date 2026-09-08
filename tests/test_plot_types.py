@@ -21,7 +21,7 @@ def test_only_schemas_defines_the_enum():
     """No module may re-declare the plot-type set (grep-verifiable)."""
     hits = subprocess.run(
         ["grep", "-rln", "PLOT_TYPE_SORT = {", str(REPO / "lib")],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8",
     ).stdout.split()
     assert hits == [str(REPO / "lib" / "schemas.py")]
 
@@ -29,14 +29,14 @@ def test_only_schemas_defines_the_enum():
 def test_every_former_site_imports_the_canonical_enum():
     for module in ("validators.py", "minor_stubs.py", "plot_manager.py", "session_manager.py",
                    "world_stats.py"):
-        src = (REPO / "lib" / module).read_text()
+        src = (REPO / "lib" / module).read_text(encoding="utf-8")
         assert "from schemas import PLOT_TYPE" in src, module
 
 
 def test_gm_plot_usage_prints_the_canonical_types():
     """The CLI help derives its type list from the enum rather than restating it."""
     out = subprocess.run(["bash", str(REPO / "tools" / "gm-plot.sh")],
-                         capture_output=True, text=True, cwd=REPO).stdout
+                         capture_output=True, text=True, encoding="utf-8", cwd=REPO).stdout
     expected = ', '.join(sorted(PLOT_TYPES, key=PLOT_TYPE_SORT.get))
     assert f"Types: {expected}" in out
 

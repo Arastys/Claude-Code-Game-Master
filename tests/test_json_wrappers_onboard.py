@@ -16,7 +16,7 @@ def _onboard(dcc_world, *args):
     """Drive the real wrapper against a hermetic world-state tree."""
     return subprocess.run(
         ["bash", str(ROOT / "tools" / "gm-player.sh"), "onboard", *args],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8",
         env={**os.environ, "GM_WORLD_STATE_BASE": str(dcc_world)},
     )
 
@@ -26,7 +26,7 @@ def _campaign_dir(dcc_world):
 
 
 def _load(dcc_world, filename):
-    return json.loads((_campaign_dir(dcc_world) / filename).read_text())
+    return json.loads((_campaign_dir(dcc_world) / filename).read_text(encoding="utf-8"))
 
 
 def test_nameless_envelope_and_flat_character(dcc_world):
@@ -61,7 +61,7 @@ def test_replace_archives_the_outgoing_pc(dcc_world):
 
     archived = list((_campaign_dir(dcc_world) / "fallen").glob("tandy-*.json"))
     assert archived, "the outgoing sheet must land in fallen/ like become() does"
-    assert json.loads(archived[0].read_text())["name"] == "Tandy"
+    assert json.loads(archived[0].read_text(encoding="utf-8"))["name"] == "Tandy"
 
     saved = _load(dcc_world, "character.json")
     assert saved["name"] == "Vex" and saved["concept"] == "a thief with a debt"

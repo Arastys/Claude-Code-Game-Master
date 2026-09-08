@@ -12,13 +12,13 @@ from lib.session_manager import SessionManager
 
 
 def _paths(world_dir):
-    active = (Path(world_dir) / "active-campaign.txt").read_text().strip()
+    active = (Path(world_dir) / "active-campaign.txt").read_text(encoding="utf-8").strip()
     base = Path(world_dir) / "campaigns" / active
     return base / "plots.json", base / "npcs.json"
 
 
 def _seed_plot(pp, name, status, npcs=None, locations=None):
-    plots = json.loads(pp.read_text()) if pp.exists() else {}
+    plots = json.loads(pp.read_text(encoding="utf-8")) if pp.exists() else {}
     plots[name] = {"type": "mystery", "status": status,
                    "description": "the wench knows the caravan route",
                    "npcs": npcs or [], "locations": locations or [],
@@ -27,7 +27,7 @@ def _seed_plot(pp, name, status, npcs=None, locations=None):
 
 
 def _place_npc(npp, name, location):
-    npcs = json.loads(npp.read_text()) if npp.exists() else {}
+    npcs = json.loads(npp.read_text(encoding="utf-8")) if npp.exists() else {}
     npcs[name] = {"description": "a test face", "attitude": "neutral",
                   "tags": {"locations": [location], "quests": []}}
     npp.write_text(json.dumps(npcs))

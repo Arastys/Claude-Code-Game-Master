@@ -65,7 +65,7 @@ def book(tmp_path):
 
 
 def _load(cdir, name):
-    return json.loads((cdir / name).read_text())
+    return json.loads((cdir / name).read_text(encoding="utf-8"))
 
 
 def test_nothing_is_deleted_by_the_cap(book):
@@ -188,12 +188,12 @@ def test_rule_prose_is_dropped_as_a_connection_target(tmp_path):
         json.dumps({"Hub": {"connections": [{"to": RULE_PROSE}]}})
     )
     report = run_reconcile(str(tmp_path))
-    locations = json.loads((tmp_path / "locations.json").read_text())
+    locations = json.loads((tmp_path / "locations.json").read_text(encoding="utf-8"))
     assert report["dropped"] == [RULE_PROSE]
     assert RULE_PROSE not in locations
     assert locations["Hub"]["connections"] == []      # dead edge pruned
 
-    facts = json.loads((tmp_path / "facts.json").read_text())
+    facts = json.loads((tmp_path / "facts.json").read_text(encoding="utf-8"))
     assert any(RULE_PROSE in f["fact"] for f in facts[FACT_CATEGORY])
 
 
@@ -266,7 +266,7 @@ def test_promoting_a_party_member_clears_the_background_tier(tmp_path):
     mgr = NPCManager(world_state_dir=str(world))
     assert mgr.promote_to_party_member("Mordecai") is True
 
-    npcs = json.loads((world / "campaigns" / "camp" / "npcs.json").read_text())
+    npcs = json.loads((world / "campaigns" / "camp" / "npcs.json").read_text(encoding="utf-8"))
     assert "background" not in npcs["Mordecai"]        # active by definition
     assert npcs["Mordecai"]["is_party_member"] is True
 
