@@ -115,3 +115,49 @@ def test_conditions_line_is_unchanged(tmp_path):
     })
     ctx = SessionManager(world).get_full_context()
     assert "Conditions: Poisoned" in ctx
+
+
+TRAIT_RULESET = {
+    "name": "The Slow Heart",
+    "kit": "custom",
+    "stat_schema": {
+        "attributes": ["strength", "dexterity", "stamina"],
+        "vitals": ["hp", "blood"],
+        "traits": ["generation", "gift_tier"],
+    },
+    "progression": {"model": "milestone"},
+    "resolution": {"model": "d20-vs-dc"},
+}
+
+
+def test_declared_traits_are_rendered(tmp_path):
+    world = _world(tmp_path, "slow-heart", TRAIT_RULESET, {
+        "name": "Rhiannon", "level": 0, "race": "Brythonic",
+        "hp": {"current": 30, "max": 30}, "blood": 7,
+        "generation": 5, "gift_tier": 1,
+    })
+    line = _character_line(world)
+    assert "Blood: 7" in line
+    assert "Generation: 5" in line
+    assert "Gift Tier: 1" in line
+    assert "?" not in line
+    assert "Gold" not in line
+
+
+def test_a_trait_absent_from_the_sheet_is_skipped(tmp_path):
+    world = _world(tmp_path, "slow-heart", TRAIT_RULESET, {
+        "name": "Rhiannon", "level": 0,
+        "hp": {"current": 30, "max": 30}, "generation": 5,
+    })
+    line = _character_line(world)
+    assert "Generation: 5" in line
+    assert "Gift Tier" not in line
+
+
+def test_a_kit_declaring_no_traits_is_unaffected(tmp_path):
+    """The three kits above declare none; adding the bucket must change nothing."""
+    world = _world(tmp_path, "hyborian", HYBORIAN_RULESET, {
+        "name": "Conan", "level": 6, "hp": {"current": 58, "max": 58},
+        "generation": 5,  # on the sheet but NOT declared -> not rendered
+    })
+    assert "Generation" not in _character_line(world)

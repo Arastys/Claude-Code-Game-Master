@@ -918,6 +918,11 @@ class SessionManager(EntityManager):
                 segments.append(f"{label}: {cur}/{mx}" if mx is not None
                                 else f"{label}: {cur}")
 
+            for trait in (kit.traits() if kit is not None else []):
+                if trait not in char:
+                    continue
+                segments.append(f"{trait.replace('_', ' ').title()}: {char[trait]}")
+
             # 5e sheet furniture: shown when the sheet carries it, never invented.
             if "ac" in char:
                 segments.append(f"AC: {char['ac']}")

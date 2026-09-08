@@ -14,7 +14,8 @@ ruleset.json shape:
 {
   "name": "Dungeon Crawler Carl",
   "kit": "custom",
-  "stat_schema": { "attributes": ["str","con","dex","int"], "vitals": ["hp"] },
+  "stat_schema": { "attributes": ["str","con","dex","int"], "vitals": ["hp"],
+                   "traits": [] },  # optional: fixed field names, rendered as-is
   "progression": { "model": "resource-axis", "resource": "viewers",
                    "tiers": [1000000, 1000000000] },
   "resolution": { "model": "d20-vs-dc" },
@@ -89,6 +90,17 @@ class WorldKit:
         an under-declared kit refuse plain damage.
         """
         return (self.stat_schema() or {}).get("vitals") or ["hp"]
+
+    def traits(self) -> List[str]:
+        """Fixed character traits this world declares — a generation, a lineage, a
+        clearance level, a caste.
+
+        Distinct from `attributes` (rolled) and `vitals` (resources that move): a
+        trait is a fixed property the world cares about and the engine deliberately
+        does not understand. It is rendered as a labelled value and never
+        interpreted, validated or defaulted. A kit declaring none gets [].
+        """
+        return (self.stat_schema() or {}).get("traits") or []
 
     def resolution(self) -> Dict[str, Any]:
         """{'model': name, 'params': {...}} regardless of ruleset syntax.

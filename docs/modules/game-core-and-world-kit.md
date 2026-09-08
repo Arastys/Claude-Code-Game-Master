@@ -97,6 +97,17 @@ would silently swap out a world's math now say so.
    file is absent, so a kit copied from a sibling campaign quietly loses its rules prose.
    `overview_seed.py` nulls the dangling pointer at import time rather than repairing it.
 
+### `stat_schema.traits` — fixed properties the engine does not understand
+
+`attributes` are rolled and `vitals` are resources that move. A **trait** is a fixed
+property of a character that the world cares about: a generation, a lineage, a caste,
+a clearance level. The engine renders a declared trait as a labelled value in the
+CHARACTER brief and does nothing else with it — no validation, no defaults, no
+interpretation. A kit that declares none is unaffected.
+
+This is the seam that keeps a campaign's vocabulary out of `lib/`. If the engine ever
+needs to know what a particular trait *means*, that is a design error.
+
 To check a live campaign rather than trusting any of this: `bash tools/gm-campaign.sh path`
 then read its `ruleset.json`, or run `uv run python lib/world_kit.py info --json`.
 
