@@ -34,3 +34,8 @@ def test_rules_doc_loads_on_demand(dcc_world):
     p = WorldKit(dcc_world).rules_doc_path()
     assert p is not None and p.name == "rules.md"
     assert "resource-axis" in p.read_text(encoding="utf-8")
+
+
+def test_traits_default_to_empty_when_the_kit_declares_none(dcc_world):
+    # WorldKit is already imported at module level in this file.
+    assert WorldKit(dcc_world).traits() == []

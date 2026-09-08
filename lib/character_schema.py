@@ -140,6 +140,17 @@ def to_flat(char: Dict[str, Any]) -> Dict[str, Any]:
     return flat
 
 
+def stat_label(name: str) -> str:
+    """Readable label for a kit-declared vital or trait.
+
+    The engine never knows what a field means, only how to print its name, so this
+    is a pure mechanical transform shared by every render site — `gm-player.sh
+    show`, the vital CLI, and the CHARACTER brief — which had drifted to two
+    conventions.
+    """
+    return str(name).replace("_", " ").title()
+
+
 # The character validator lives in schemas.validate_character (shape-agnostic,
 # kit-aware). The open-shape-only validator that used to live here reported a
 # loaded flat sheet as entirely missing — deleted 2026-08-13.

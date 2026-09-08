@@ -566,7 +566,7 @@ how a world plays without baking in D&D 5e.
 {
   "name": "Dungeon Crawler Carl",
   "kit": "custom | dnd5e   (absent = custom; dnd5e unlocks the D&D mechanics skills + dnd5eapi)",
-  "stat_schema": { "attributes": ["str","con","dex","int"], "vitals": ["hp"] },
+  "stat_schema": { "attributes": ["str","con","dex","int"], "vitals": ["hp"], "traits": [] },
   "progression": { "model": "milestone | xp-levels | resource-axis", "...": "model config (thresholds/tiers/resource)" },
   "resolution": { "model": "d20-vs-dc" },
   "lethality": { "model": "death-saves | gritty | none", "massive_damage_at": 20 },
@@ -584,6 +584,10 @@ how a world plays without baking in D&D 5e.
   block. Written by `book_bible.write_systems` (`gm-extract.sh write-systems`).
 
 - `stat_schema.attributes` is open and kit-defined (no fixed six abilities).
+- `stat_schema.traits` (optional; absent/empty = `[]`) names fixed, non-moving
+  character properties the world cares about (a generation, a lineage, a caste, a
+  clearance level). `WorldKit.traits()` returns the declared names; the engine
+  renders each as a labelled value and never interprets it.
 - `progression.model` selects one of the core's three models; its config
   (`thresholds` for xp-levels, `resource`+`tiers` for resource-axis) is supplied here.
 - World-flavor systems (loot boxes, viewers) stay in campaign-overview `campaign_rules`.

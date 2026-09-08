@@ -140,7 +140,6 @@ def save_character(character_data):
         "class": character_data.get('class', ''),
         "level": character_data['level'],
         "hp": hp,
-        "ac": character_data.get('ac', 10),  # Default AC, can be overridden
         "stats": stats,
         "skills": character_data.get('skills', {}),
         "equipment": character_data.get('equipment', []),
@@ -156,7 +155,7 @@ def save_character(character_data):
     # contradicts PlayerManager._xp_view, which refuses to let a milestone sheet
     # "grow a phantom xp object just because something read it".
     DND_SHEET_DEFAULTS = {
-        'gold': 0, 'xp': {"current": 0, "next_level": 300},
+        'ac': 10, 'gold': 0, 'xp': {"current": 0, "next_level": 300},
         'background': '', 'alignment': '', 'bonds': '',
         'flaws': '', 'ideals': '', 'traits': '',
     }
@@ -178,6 +177,15 @@ def save_character(character_data):
         if vital != 'hp' and vital in character_data:
             character[vital] = character_data[vital]
 
+    # Kit traits (a generation, a lineage, a caste, ...) are fixed properties the
+    # engine never interprets — carry through whatever the kit declares and the
+    # author supplied. Without this loop a declared trait had no supported write
+    # path at all: not a vital (gm-player.sh vital refuses it), not the active-PC
+    # selector (gm-player.sh set), so hand-editing character.json was the only way.
+    for trait in kit.traits():
+        if trait in character_data:
+            character[trait] = character_data[trait]
+
     # Get the active campaign directory
     campaign_mgr = CampaignManager()
     campaign_dir = campaign_mgr.get_active_campaign_dir()
@@ -193,7 +201,7 @@ def save_character(character_data):
         file_path = characters_dir / f"{char_id}.json"
 
     try:
-        with open(file_path, 'w') as f:
+        with open(file_path, 'w', encoding="utf-8") as f:
             json.dump(character, f, indent=2)
 
         return {

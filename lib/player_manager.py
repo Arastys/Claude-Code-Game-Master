@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from entity_manager import EntityManager
-from character_schema import to_flat, is_open_schema
+from character_schema import to_flat, is_open_schema, stat_label
 
 
 class PlayerManager(EntityManager):
@@ -182,9 +182,10 @@ class PlayerManager(EntityManager):
             print(f"[ERROR] Character '{name}' not found")
             return None
 
-        hp = char.get('hp', {})
+        hp_cur, hp_max = self._read_vital(char, 'hp')
+        hp_str = f"{hp_cur}/{hp_max}" if hp_max is not None else f"{hp_cur}"
         gold = char.get('gold', 0)
-        summary = f"{char.get('name', name)} - {char.get('race', '?')} {char.get('class', '?')} Level {char.get('level', 1)} (HP: {hp.get('current', 0)}/{hp.get('max', 0)}, Gold: {gold})"
+        summary = f"{char.get('name', name)} - {char.get('race', '?')} {char.get('class', '?')} Level {char.get('level', 1)} (HP: {hp_str}, Gold: {gold})"
         summary += self._vitals_summary(char)
         status = char.get('status')
         if status in ('dying', 'dead'):
@@ -199,10 +200,11 @@ class PlayerManager(EntityManager):
         char = self._load_character()
         if not char:
             return []
-        hp = char.get('hp', {})
+        hp_cur, hp_max = self._read_vital(char, 'hp')
+        hp_str = f"{hp_cur}/{hp_max}" if hp_max is not None else f"{hp_cur}"
         gold = char.get('gold', 0)
         return [
-            f"{char.get('name', 'Unknown')} - {char.get('race', '?')} {char.get('class', '?')} Level {char.get('level', 1)} (HP: {hp.get('current', 0)}/{hp.get('max', 0)}, Gold: {gold})"
+            f"{char.get('name', 'Unknown')} - {char.get('race', '?')} {char.get('class', '?')} Level {char.get('level', 1)} (HP: {hp_str}, Gold: {gold})"
             + self._vitals_summary(char)
         ]
 
@@ -552,7 +554,7 @@ class PlayerManager(EntityManager):
                 continue
             current, maximum = self._read_vital(char, vital)
             value = f"{current}/{maximum}" if maximum is not None else f"{current}"
-            parts.append(f"{vital.capitalize()}: {value}")
+            parts.append(f"{stat_label(vital)}: {value}")
         return f" | {' | '.join(parts)}" if parts else ""
 
     def modify_vital(self, name: str, vital: str, amount: Optional[int] = None,
@@ -609,7 +611,7 @@ class PlayerManager(EntityManager):
 
         shown = f"{new_value}/{maximum}" if maximum is not None else f"{new_value}"
         print(f"VITAL {char_name} {vital}: {current} -> {new_value}")
-        print(f"{vital.capitalize()}: {shown}")
+        print(f"{stat_label(vital)}: {shown}")
 
         return {
             'success': True,

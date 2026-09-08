@@ -124,6 +124,12 @@ Several of those blocks carry design decisions that are not obvious from reading
   when their JSON file is empty, so a campaign that declares neither sees neither header.
   See [the living world](living-world.md).
 
+- **CHARACTER is kit-driven, not a fixed 5e template.** The line is assembled from what
+  `WorldKit` declares and the sheet actually carries: `vitals()` beyond `hp`, then
+  `traits()` — fixed properties like a generation or a clearance level, rendered as a
+  labelled value and never interpreted. 5e-only furniture (`ac`, `xp`, `gold`) shows
+  only when the sheet has it. See [game core and World Kit](game-core-and-world-kit.md).
+
 `--full` lifts every bound. `DM_DEBUG_CONTEXT=1` prints an approximate token count to
 stderr without changing the output; the ~2k-token target it reports against is guidance,
 never a cut.

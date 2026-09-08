@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, str(Path(__file__).parent))
 
 from entity_manager import EntityManager, npcs_present
-from character_schema import to_flat
+from character_schema import to_flat, stat_label
 from schemas import PLOT_TYPE_SORT
 from world_kit import WorldKit
 
@@ -622,6 +622,7 @@ class SessionManager(EntityManager):
         if kit is not None:
             skills = kit.skills()
             vitals = kit.vitals()
+            traits = kit.traits()
             lines.append("")
             lines.append("--- KIT ---")
             lines.append(f"kit: {kit.kit()}")
@@ -629,6 +630,7 @@ class SessionManager(EntityManager):
             lines.append(f"resolution: {kit.resolution_model()}")
             lines.append(f"progression: {kit.progression_model()}")
             lines.append(f"vitals: {', '.join(vitals) if vitals else '(none)'}")
+            lines.append(f"traits: {', '.join(traits) if traits else '(none)'}")
             lines.append(f"skills: {', '.join(skills) if skills else '(none)'}")
 
         # --- PRIMER (play pack: tonight's table, not the gazetteer) ---
@@ -890,21 +892,70 @@ class SessionManager(EntityManager):
         if char:
             name = char.get('name', 'Unknown')
             level = char.get('level', 1)
-            race = char.get('race', '?')
-            cls = char.get('class', '?')
-            hp = char.get('hp', {})
-            hp_cur = hp.get('current', 0)
-            hp_max = hp.get('max', 0)
-            ac = char.get('ac', '?')
-            xp = char.get('xp', {})
-            if isinstance(xp, dict):
-                xp_val = xp.get('current', 0)
-            else:
-                xp_val = xp
-            gold = char.get('gold', 0)
             conditions = char.get('conditions', [])
             cond_str = ', '.join(conditions) if conditions else '(none)'
-            lines.append(f"{name} - Level {level} {race} {cls} | HP: {hp_cur}/{hp_max} | AC: {ac} | XP: {xp_val} | Gold: {gold}")
+
+            # Assembled from what the kit declares and the sheet actually carries —
+            # never a fixed template. The old line printed `?` for class and AC and an
+            # invented `Gold: 0` on worlds with no coinage, while hiding every kit
+            # vital beyond hp. gm-player.sh show's vitals SUFFIX (_vitals_summary) has
+            # been kit-driven for some time; this block kept a divergent hardcoded
+            # copy of it — show's base line (name/race/class/HP/gold) is still a
+            # hardcoded 5e f-string, untouched by this fix.
+            from player_manager import PlayerManager
+
+            declared = kit.vitals() if kit is not None else ["hp"]
+
+            identity = f"{name} - Level {level}"
+            rendered = set()
+            for key in ("race", "class"):
+                if char.get(key):
+                    identity += f" {char[key]}"
+                    rendered.add(key)
+            segments = [identity]
+
+            # hp is a vital like any other: PlayerManager._read_vital already
+            # handles both the {current, max} dict shape and a bare-number track
+            # (max comes back None). Shown when the kit declares hp OR the sheet
+            # already carries it — never invented for a kit whose declared vitals
+            # omit hp entirely.
+            if "hp" in declared or "hp" in char:
+                hp_cur, hp_max = PlayerManager._read_vital(char, 'hp')
+                segments.append(f"HP: {hp_cur}/{hp_max}" if hp_max is not None
+                                else f"HP: {hp_cur}")
+                rendered.add("hp")
+
+            for vital in declared:
+                if vital in rendered or vital not in char:
+                    continue
+                cur, mx = PlayerManager._read_vital(char, vital)
+                label = stat_label(vital)
+                segments.append(f"{label}: {cur}/{mx}" if mx is not None
+                                else f"{label}: {cur}")
+                rendered.add(vital)
+
+            for trait in (kit.traits() if kit is not None else []):
+                if trait in rendered or trait not in char:
+                    continue
+                segments.append(f"{stat_label(trait)}: {char[trait]}")
+                rendered.add(trait)
+
+            # 5e sheet furniture: shown when the sheet carries it AND the name was
+            # not already rendered above (identity/vital/trait) — never invented,
+            # never doubled when a kit reuses a furniture name for its own field.
+            if "ac" not in rendered and "ac" in char:
+                segments.append(f"AC: {char['ac']}")
+                rendered.add("ac")
+            if "xp" not in rendered and "xp" in char:
+                raw = char["xp"]
+                segments.append(
+                    f"XP: {raw.get('current', 0) if isinstance(raw, dict) else raw}")
+                rendered.add("xp")
+            if "gold" not in rendered and "gold" in char:
+                segments.append(f"Gold: {char['gold']}")
+                rendered.add("gold")
+
+            lines.append(" | ".join(segments))
             lines.append(f"Conditions: {cond_str}")
         else:
             lines.append("No character found.")
