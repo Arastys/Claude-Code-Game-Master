@@ -379,3 +379,18 @@ def test_session_number_is_public_and_matches_the_private_accessor(dcc_world):
     from lib.session_manager import SessionManager
     sm = SessionManager(dcc_world)
     assert sm.session_number() == sm._get_session_number()
+
+
+def test_the_skill_exists_and_declares_its_frontmatter():
+    """The action router loads skills by name; a missing name breaks the load."""
+    skill = REPO_ROOT / ".claude" / "skills" / "gm-knowledge" / "SKILL.md"
+    body = skill.read_text(encoding="utf-8")
+    assert body.startswith("---")
+    assert "name: gm-knowledge" in body
+    assert "description:" in body
+
+
+def test_claude_md_routes_information_changes_to_the_ledger():
+    body = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    assert "gm-know.sh" in body
+    assert "gm-knowledge" in body

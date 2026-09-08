@@ -56,6 +56,7 @@ SWAP (make the chosen character the active PC):
 | Apply a condition | Conditions | `gm-conditions` |
 | LEVEL_UP / milestone | Progression (kit's model) | `gm-levelup` |
 | Narrate / voice an NPC | Narration craft | `gm-craft` |
+| Information moves, or an NPC is about to act on something | Who knows what | `gm-knowledge` |
 
 If a skill fails to load, fall back to the matching section in the archived full
 ruleset (`docs/` / git history). The RULES SYSTEM is the active World Kit's skill —
@@ -111,6 +112,7 @@ grounded source passages.
 - **Reactivity:** `gm-session.sh move` / `gm-time.sh` auto-run `gm-consequence.sh tick` — consequences whose triggers match fire (with a reason; veto for timing). `gm-consequence.sh log` / `rollback` for provenance.
 - **Threat clocks:** `gm-clock.sh` — named pressure. Time-clocks auto-advance on `gm-time.sh`; event clocks advance by hand (`gm-clock.sh advance`). A full clock is a beat due (`gm-clock.sh beats`); record a dramatic-choice fork with `gm-clock.sh choose`.
 - **World tracks & factions:** `gm-track.sh` moves a world-level meter when the fiction moves it (something witnessed, a body found, someone survived) — not on a timer, unlike a clock. `gm-faction.sh standing` shifts on social outcomes (a bargain kept, a betrayal); contested ground (`gm-faction.sh contested`) is a story seed to pull on, not just data to report.
+- **Who knows what:** `gm-know.sh` records which NPCs, factions and the PC have actually been told a thing. Write a stance the moment information moves, before narrating. The scene brief surfaces the `unaware` lines for whoever is present — read them as what the person in front of the player cannot say. A faction knowing something never means its members do.
 - **Memory:** `gm-recall.sh recall "..."` surfaces prior events (memory refreshes on save). For a new/important scene, `gm-lore.sh "<location>" [--important]` returns a grounded chapter brief from the source book.
 - **Between sessions:** at session end, optionally propose a few SMALL off-screen developments (grounded in plots/RAG) and persist them: `gm-session.sh world-tick '<json list>'` (applies all, warns if more than 3, `world-tick-rollback` undoes).
 
@@ -123,6 +125,8 @@ grounded source passages.
 | Roll a signature system the kit declares (ROLL it, never narrate it) | `gm-system.sh list` / `gm-system.sh roll "<name>" [--current N --delta N \| --severity N \| --track-value N] [--modifier N]` |
 | Party NPC stats | `gm-npc.sh` |
 | NPC mood/goal/secret | `gm-npc.sh set-inner` / `mood` |
+| **Information moved** — someone witnessed, was told, overheard, or was deliberately kept in the dark | `gm-know.sh stance <id> "<who>" knows\|suspects --source "..."` (`add` a new proposition first; a lie is `--truth false` + a `knows` stance) |
+| A knowledge thread is spent / retconned | `gm-know.sh status <id> dormant` / `gm-know.sh forget <id> "<who>"` |
 | **What an NPC now remembers about the player** (a slight, a kindness, a debt, a lie they caught) | `gm-npc.sh update "<name>" "<event>"` — surfaces back under them in scene context next time they're present |
 | Character look (PC/NPC) | `gm-player.sh set-appearance` / `gm-npc.sh set-appearance` (the 11-field `visual_appearance` — author at creation, update when the look changes) |
 | Condition (PC) | `gm-condition.sh` |

@@ -175,6 +175,28 @@ owns the mutable half — `standing` (clamped `[-5, +5]`, consumable directly as
 `holders_of(location)` and `contested()` are what make territory more than a list:
 ground claimed by two factions is flagged in scene context.
 
+## The knowledge ledger (`knowledge.json`)
+
+Threat clocks and world tracks move pressure; factions hold standing and ground.
+The knowledge ledger holds the contested half of what is true: who has actually
+been told a thing.
+
+A **proposition** is a statement plus a truth value (`true` / `false` /
+`unresolved`) and a status (`active` / `dormant`). A **stance** is one named
+entity's relationship to it — `knows` or `suspects`. Absence of a stance is
+`unaware` and is never stored, so recording ignorance costs nothing.
+
+Deception falls out of the truth value: a `false` proposition someone holds as
+`knows` is a character who is certain and wrong. Knowers are NPCs, factions, or
+the PC, and there is no inheritance — a faction's stance is never copied to its
+members, because a ledger that infers knowledge nobody was given fails at its only
+job.
+
+Written with `tools/gm-know.sh`, owned by `lib/knowledge_manager.py`, and surfaced
+in the scene brief as `--- WHO KNOWS WHAT (present) ---` for the propositions
+relevant to whoever is in the room. Nothing propagates on its own: the GM moves
+information, the same way the GM moves a faction standing.
+
 ## Related
 
 - [Scene context](scene-context.md) — where clocks, pending consequences, and READY THREADS surface
