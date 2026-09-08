@@ -82,3 +82,25 @@ def test_dnd5e_sheet_is_unchanged(dcc_world):
     assert sheet["gold"] == 0
     assert sheet["xp"] == {"current": 0, "next_level": 300}
     assert sheet["background"] == ""
+
+
+def test_custom_kit_sheet_has_no_invented_ac(dcc_world):
+    """The third field in this family, missed when gold and xp were fixed.
+
+    `ac` sat on its own line with a hardcoded default of 10 rather than in
+    DND_SHEET_DEFAULTS, so every non-dnd5e sheet gained a phantom armour class —
+    and once the CHARACTER brief learned to render `ac` when present, it showed.
+    """
+    assert "ac" not in _run_save(dcc_world, CUSTOM_RULESET, CUSTOM_PC)
+
+
+def test_dnd5e_still_gets_its_default_ac(dcc_world):
+    # calculate_saves direct-indexes all six abilities, so a 5e PC must carry them.
+    pc = {"name": "Thorin", "race": "Dwarf", "class": "Fighter", "level": 1,
+          "stats": {"str": 15, "dex": 10, "con": 14, "int": 10, "wis": 10, "cha": 10}}
+    assert _run_save(dcc_world, DND_RULESET, pc)["ac"] == 10
+
+
+def test_an_authored_ac_survives_on_any_kit(dcc_world):
+    authored = dict(CUSTOM_PC, ac=14)
+    assert _run_save(dcc_world, CUSTOM_RULESET, authored)["ac"] == 14

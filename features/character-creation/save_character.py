@@ -140,7 +140,6 @@ def save_character(character_data):
         "class": character_data.get('class', ''),
         "level": character_data['level'],
         "hp": hp,
-        "ac": character_data.get('ac', 10),  # Default AC, can be overridden
         "stats": stats,
         "skills": character_data.get('skills', {}),
         "equipment": character_data.get('equipment', []),
@@ -156,7 +155,7 @@ def save_character(character_data):
     # contradicts PlayerManager._xp_view, which refuses to let a milestone sheet
     # "grow a phantom xp object just because something read it".
     DND_SHEET_DEFAULTS = {
-        'gold': 0, 'xp': {"current": 0, "next_level": 300},
+        'ac': 10, 'gold': 0, 'xp': {"current": 0, "next_level": 300},
         'background': '', 'alignment': '', 'bonds': '',
         'flaws': '', 'ideals': '', 'traits': '',
     }
