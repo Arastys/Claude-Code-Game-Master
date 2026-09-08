@@ -97,6 +97,54 @@ def test_add_track_clamps_negative_initial_value(dcc_world):
     assert m.get_tracks()["Y Cof"]["current"] == 0
 
 
+def test_add_track_resets_an_existing_track(dcc_world):
+    """add_track is create-or-reset, matching add_clock/add_faction behavior.
+
+    Establish state first, then re-add with no thresholds/note: the prior
+    current value and note must be gone, not merely absent from a fresh call.
+    """
+    m = WorldTrackManager(dcc_world)
+    m.add_track("Y Cof", 6, thresholds=THRESHOLDS, note="What the world remembers.",
+                current=4)
+    assert m.get_tracks()["Y Cof"]["current"] == 4
+
+    m.add_track("Y Cof", 6)
+    stored = m.get_tracks()["Y Cof"]
+    assert stored["current"] == 0
+    assert stored["thresholds"] == []
+    assert "note" not in stored
+
+
+def test_add_track_rejects_a_non_list_thresholds_shape(dcc_world):
+    m = WorldTrackManager(dcc_world)
+    try:
+        m.add_track("X", 5, thresholds={"at": 3, "consequence": "x"})
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+    assert "X" not in m.get_tracks()
+
+
+def test_add_track_rejects_a_threshold_missing_at(dcc_world):
+    m = WorldTrackManager(dcc_world)
+    try:
+        m.add_track("X", 5, thresholds=[{"consequence": "boom"}])
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+    assert "X" not in m.get_tracks()
+
+
+def test_add_track_rejects_a_non_int_coercible_at(dcc_world):
+    m = WorldTrackManager(dcc_world)
+    try:
+        m.add_track("X", 5, thresholds=[{"at": "soon"}])
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+    assert "X" not in m.get_tracks()
+
+
 from lib.consequence_manager import ConsequenceManager
 
 RUMOUR = "A rumour with the right shape is circulating."
@@ -134,6 +182,21 @@ def test_climbing_two_thresholds_at_once_fires_both(dcc_world):
     m.add_track("Y Cof", 6, thresholds=THRESHOLDS)
     result = m.adjust("Y Cof", 5)
     assert len(result["fired"]) == 2
+
+
+def test_a_second_upward_crossing_of_the_same_threshold_fires_again(dcc_world):
+    """Unlike a threat clock (fires once, transition-guarded), a world track is
+    designed to oscillate — climbing back through a threshold it already fired
+    is a genuine new beat (the world re-learning something), not a duplicate,
+    so it must fire again. Pins the divergence documented on _fire_crossings."""
+    m = WorldTrackManager(dcc_world)
+    m.add_track("Y Cof", 6, thresholds=THRESHOLDS)
+    first = m.adjust("Y Cof", 3)   # 0 -> 3, crosses threshold at 3
+    assert len(first["fired"]) == 1
+    m.adjust("Y Cof", -3)          # 3 -> 0, falling fires nothing
+    second = m.adjust("Y Cof", 3)  # 0 -> 3 again, crosses the same threshold again
+    assert len(second["fired"]) == 1
+    assert len(_fired(dcc_world)) == 2
 
 
 def test_threshold_without_a_consequence_fires_nothing(dcc_world):
@@ -203,6 +266,18 @@ def test_cli_add_malformed_thresholds_json_emits_error_envelope(dcc_world):
     payload = json.loads(proc.stdout)
     assert payload["ok"] is False
     assert "--thresholds-json" in payload["error"]
+
+
+def test_cli_add_structurally_invalid_thresholds_shape_emits_error_envelope(dcc_world):
+    """Valid JSON, wrong shape (a dict of {"at": ...} instead of a list) must be
+    rejected at add-time with a clean --json envelope, not stored and left to
+    crash the next adjust/set call."""
+    proc = _run_cli(dcc_world, "add", "X", "5",
+                    "--thresholds-json", '{"at": 3, "consequence": "x"}', "--json")
+    assert proc.returncode != 0
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is False
+    assert "X" not in WorldTrackManager(dcc_world).get_tracks()
 
 
 # --- Wrapper-level test (additional requirement, beyond the brief) ---

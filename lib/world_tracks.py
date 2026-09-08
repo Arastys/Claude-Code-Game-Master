@@ -40,9 +40,18 @@ class WorldTrackManager(EntityManager):
         Climbing is the dangerous direction — the world learning something is an
         event that arrives, while the world forgetting is a slow condition. Firing
         both ways would put an incoherent beat in front of the GM every time a
-        track decayed. Mirrors ThreatClockManager._fire_if_filled, including the
-        stdout redirect: add_consequence announces itself, and this runs inside
-        adjust(), whose --json output must stay parseable.
+        track decayed. Mirrors ThreatClockManager._fire_if_filled's stdout redirect
+        (add_consequence announces itself, and this runs inside adjust(), whose
+        --json output must stay parseable) but NOT its transition guard: that
+        clock stamps `consequence_fired` as provenance specifically so a filled
+        clock fires once, because filling a clock is terminal. A world track is
+        not terminal — it is designed to oscillate (2→3→2→3) — so this deliberately
+        fires on EVERY upward crossing, unguarded, including a threshold it has
+        already fired on this same track. The world re-learning something it had
+        forgotten is a genuine new beat, not a duplicate of the first time it
+        learned it. The consequence: a track driven up and down repeatedly across
+        the same threshold will write a repeated (not deduplicated) consequence
+        each time it climbs back through — by design, not oversight.
         """
         if result["after"] <= result["before"]:
             return []
@@ -61,8 +70,32 @@ class WorldTrackManager(EntityManager):
                     trigger=f"the {name} track reached {threshold.get('at')}"))
         return fired
 
+    @staticmethod
+    def _validate_thresholds(thresholds: List[Dict]) -> None:
+        """Reject a structurally-invalid `thresholds` shape at write time.
+
+        Valid JSON of the wrong shape (a dict instead of a list, a threshold
+        missing `at`, an `at` that isn't int-coercible) would otherwise pass
+        straight through into storage and only blow up later, inside adjust/
+        set — the only ways left to touch the track once it is poisoned.
+        """
+        if not isinstance(thresholds, list):
+            raise ValueError("thresholds must be a list of {\"at\": <int>, ...} objects")
+        for entry in thresholds:
+            if not isinstance(entry, dict):
+                raise ValueError(f"each threshold must be an object, got: {entry!r}")
+            if "at" not in entry:
+                raise ValueError(f"threshold missing required \"at\": {entry!r}")
+            try:
+                int(entry["at"])
+            except (TypeError, ValueError):
+                raise ValueError(f"threshold \"at\" must be an integer: {entry!r}")
+
     def add_track(self, name: str, max_value: int, thresholds: List[Dict] = None,
                   note: str = None, current: int = 0) -> Dict[str, Any]:
+        """Create or reset a track. Matches add_clock/add_faction: create-or-reset, not upsert."""
+        if thresholds is not None:
+            self._validate_thresholds(thresholds)
         data = self._load()
         # Delegate clamping to named_track so it owns the [0, max] arithmetic.
         clamped_current = named_track(0, int(current),
@@ -160,8 +193,11 @@ def main():
                 thresholds = json.loads(args.thresholds_json)
             except json.JSONDecodeError as e:
                 sys.exit(emit_error(f"invalid --thresholds-json: {e}", json_mode))
-        out = m.add_track(args.name, args.max, thresholds=thresholds,
-                          note=args.note, current=args.current)
+        try:
+            out = m.add_track(args.name, args.max, thresholds=thresholds,
+                              note=args.note, current=args.current)
+        except ValueError as e:
+            sys.exit(emit_error(str(e), json_mode))
     elif args.action == "adjust":
         out = m.adjust(args.name, args.delta)
     elif args.action == "set":
