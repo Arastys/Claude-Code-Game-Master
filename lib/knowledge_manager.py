@@ -168,3 +168,84 @@ class KnowledgeManager(EntityManager):
             if stance != UNAWARE:
                 out[pid] = dict(entry, id=pid, stance=stance)
         return out
+
+
+def _current_session() -> int:
+    """The live session number, or 0 if it cannot be read.
+
+    Imported lazily: session_manager is a large module and the ledger itself has
+    no need of it. Never read `session_count` from campaign-overview.json —
+    campaign_manager writes it once at creation and nothing increments it.
+    """
+    try:
+        from session_manager import SessionManager
+        return SessionManager().session_number()
+    except Exception:
+        return 0
+
+
+def main():
+    import argparse
+    import json
+    from cli_output import wants_json, strip_json_flag, emit, emit_error
+
+    parser = argparse.ArgumentParser(description="The knowledge ledger")
+    sub = parser.add_subparsers(dest="action")
+
+    p = sub.add_parser("add"); p.add_argument("statement")
+    p.add_argument("--truth", choices=TRUTHS, default="unresolved")
+    p.add_argument("--about")
+    p.add_argument("--status", choices=STATUSES, default="active")
+    p = sub.add_parser("stance"); p.add_argument("pid"); p.add_argument("knower")
+    p.add_argument("stance", choices=STANCES); p.add_argument("--source")
+    p = sub.add_parser("forget"); p.add_argument("pid"); p.add_argument("knower")
+    p = sub.add_parser("who-knows"); p.add_argument("needle")
+    p = sub.add_parser("held-by"); p.add_argument("knower")
+    p = sub.add_parser("status"); p.add_argument("pid")
+    p.add_argument("status", choices=STATUSES)
+    p = sub.add_parser("list")
+    p.add_argument("--active", action="store_true")
+    p.add_argument("--dormant", action="store_true")
+
+    json_mode = wants_json()
+    args = parser.parse_args(strip_json_flag(sys.argv[1:]))
+    if not args.action:
+        parser.print_help(); sys.exit(1)
+
+    m = KnowledgeManager()
+    session = _current_session()
+
+    if args.action == "add":
+        out = m.add_proposition(args.statement, truth=args.truth,
+                                about=args.about, status=args.status,
+                                session=session)
+    elif args.action == "stance":
+        out = m.set_stance(args.pid, args.knower, args.stance,
+                           source=args.source, session=session)
+    elif args.action == "forget":
+        out = m.forget(args.pid, args.knower)
+    elif args.action == "who-knows":
+        out = m.who_knows(args.needle)
+    elif args.action == "held-by":
+        out = m.held_by(args.knower)
+    elif args.action == "status":
+        out = m.set_status(args.pid, args.status)
+    else:
+        props = m.get_propositions()
+        if args.active:
+            props = {k: v for k, v in props.items() if v.get("status") == "active"}
+        elif args.dormant:
+            props = {k: v for k, v in props.items() if v.get("status") == "dormant"}
+        out = props
+
+    if out is None:
+        sys.exit(emit_error(f"no such proposition: {args.pid}", json_mode))
+
+    if json_mode:
+        emit(out, json_mode=True)
+    else:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

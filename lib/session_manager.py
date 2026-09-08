@@ -1493,6 +1493,15 @@ class SessionManager(EntityManager):
         campaign = self.json_ops.load_json(self.campaign_file)
         return campaign.get('current_character')
 
+    def session_number(self) -> int:
+        """Public alias for the current session number.
+
+        Other modules need this and should not reach through an underscore for
+        it. The derivation stays in _get_session_number, which the rest of this
+        class already calls.
+        """
+        return self._get_session_number()
+
     def _get_session_number(self) -> int:
         """Current session number, derived from matched start/end pairs.
 

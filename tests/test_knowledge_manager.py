@@ -201,3 +201,181 @@ def test_the_ledger_survives_a_reload(dcc_world):
     fresh = KnowledgeManager(dcc_world).get_propositions()
     assert fresh["P1"]["about"] == "Rhiannon"
     assert fresh["P1"]["stances"]["Mair"]["since"] == 4
+
+
+# --- CLI + wrapper ---
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _run_cli(world, *args):
+    env = dict(os.environ, GM_WORLD_STATE_BASE=str(world))
+    return subprocess.run(
+        [sys.executable, str(REPO_ROOT / "lib" / "knowledge_manager.py"), *args],
+        capture_output=True, text=True, env=env, cwd=str(REPO_ROOT))
+
+
+def test_cli_add_emits_a_json_envelope_with_the_new_id(dcc_world):
+    proc = _run_cli(dcc_world, "add", DROWNED, "--truth", "false", "--json")
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["data"]["id"] == "P1"
+    assert payload["data"]["truth"] == "false"
+
+
+def test_cli_stance_records_and_reports(dcc_world):
+    KnowledgeManager(dcc_world).add_proposition(AGELESS)
+    proc = _run_cli(dcc_world, "stance", "P1", "Mair", "knows",
+                    "--source", "told by Eurgain", "--json")
+    assert proc.returncode == 0, proc.stderr
+    data = json.loads(proc.stdout)["data"]
+    assert data["stances"]["Mair"]["stance"] == "knows"
+    assert data["stances"]["Mair"]["source"] == "told by Eurgain"
+
+
+def test_cli_rejects_an_unknown_proposition_with_a_nonzero_exit(dcc_world):
+    proc = _run_cli(dcc_world, "stance", "P99", "Mair", "knows", "--json")
+    assert proc.returncode != 0
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is False
+    assert "P99" in payload["error"]
+
+
+def test_cli_rejects_an_invalid_stance_at_the_argument_parser(dcc_world):
+    KnowledgeManager(dcc_world).add_proposition(AGELESS)
+    proc = _run_cli(dcc_world, "stance", "P1", "Mair", "certain", "--json")
+    assert proc.returncode != 0
+
+
+def test_cli_who_knows_returns_matches(dcc_world):
+    m = KnowledgeManager(dcc_world)
+    m.add_proposition(DROWNED)
+    m.set_stance("P1", "Mair", "knows")
+    proc = _run_cli(dcc_world, "who-knows", "Nant Ddu", "--json")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["data"]["P1"]["stances"]["Mair"]["stance"] == "knows"
+
+
+def test_cli_held_by_returns_what_one_entity_holds(dcc_world):
+    m = KnowledgeManager(dcc_world)
+    m.add_proposition(DROWNED)
+    m.set_stance("P1", "Mair", "suspects")
+    proc = _run_cli(dcc_world, "held-by", "Mair", "--json")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["data"]["P1"]["stance"] == "suspects"
+
+
+def test_cli_list_filters_by_status(dcc_world):
+    m = KnowledgeManager(dcc_world)
+    m.add_proposition(DROWNED)
+    m.add_proposition(AGELESS)
+    m.set_status("P2", "dormant")
+    assert list(json.loads(_run_cli(dcc_world, "list", "--active", "--json").stdout)["data"]) == ["P1"]
+    assert list(json.loads(_run_cli(dcc_world, "list", "--dormant", "--json").stdout)["data"]) == ["P2"]
+    assert sorted(json.loads(_run_cli(dcc_world, "list", "--json").stdout)["data"]) == ["P1", "P2"]
+
+
+def test_cli_forget_returns_the_knower_to_unaware(dcc_world):
+    m = KnowledgeManager(dcc_world)
+    m.add_proposition(AGELESS)
+    m.set_stance("P1", "Mair", "knows")
+    proc = _run_cli(dcc_world, "forget", "P1", "Mair", "--json")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["data"]["stances"] == {}
+
+
+def test_cli_status_moves_a_proposition_dormant(dcc_world):
+    KnowledgeManager(dcc_world).add_proposition(AGELESS)
+    proc = _run_cli(dcc_world, "status", "P1", "dormant", "--json")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["data"]["status"] == "dormant"
+
+
+def test_cli_with_no_action_prints_help_and_exits_nonzero(dcc_world):
+    proc = _run_cli(dcc_world)
+    assert proc.returncode != 0
+
+
+# --- Wrapper-level tests ---
+#
+# The CLI tests above invoke lib/knowledge_manager.py directly and never touch
+# tools/gm-know.sh. That is not enough. A wrapper written as a `case` dispatcher
+# rather than a genuine `"$@"` pass-through prints a usage banner and exits 0
+# while every test above stays green — that exact defect shipped once and
+# survived three review gates. json.loads() below fails hard on a usage banner.
+
+
+def _run_wrapper(world, *args):
+    return subprocess.run(
+        ["bash", str(REPO_ROOT / "tools" / "gm-know.sh"), *args],
+        capture_output=True, text=True,
+        env={**os.environ, "GM_WORLD_STATE_BASE": str(world)},
+        cwd=str(REPO_ROOT))
+
+
+def test_wrapper_add_reaches_the_python_manager(dcc_world):
+    proc = _run_wrapper(dcc_world, "add", AGELESS, "--truth", "true", "--json")
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["data"]["id"] == "P1"
+
+
+def test_wrapper_stance_reaches_the_python_manager(dcc_world):
+    KnowledgeManager(dcc_world).add_proposition(AGELESS)
+    proc = _run_wrapper(dcc_world, "stance", "P1", "Mair", "suspects", "--json")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["data"]["stances"]["Mair"]["stance"] == "suspects"
+
+
+def test_wrapper_forget_reaches_the_python_manager(dcc_world):
+    m = KnowledgeManager(dcc_world)
+    m.add_proposition(AGELESS)
+    m.set_stance("P1", "Mair", "knows")
+    proc = _run_wrapper(dcc_world, "forget", "P1", "Mair", "--json")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["data"]["stances"] == {}
+
+
+def test_wrapper_who_knows_reaches_the_python_manager(dcc_world):
+    KnowledgeManager(dcc_world).add_proposition(DROWNED)
+    proc = _run_wrapper(dcc_world, "who-knows", "P1", "--json")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["data"]["P1"]["statement"] == DROWNED
+
+
+def test_wrapper_held_by_reaches_the_python_manager(dcc_world):
+    m = KnowledgeManager(dcc_world)
+    m.add_proposition(DROWNED)
+    m.set_stance("P1", "Y Bleiddiaid", "knows")
+    proc = _run_wrapper(dcc_world, "held-by", "Y Bleiddiaid", "--json")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["data"]["P1"]["stance"] == "knows"
+
+
+def test_wrapper_list_reaches_the_python_manager(dcc_world):
+    KnowledgeManager(dcc_world).add_proposition(AGELESS)
+    proc = _run_wrapper(dcc_world, "list", "--json")
+    assert proc.returncode == 0, proc.stderr
+    assert list(json.loads(proc.stdout)["data"]) == ["P1"]
+
+
+def test_wrapper_status_reaches_the_python_manager(dcc_world):
+    KnowledgeManager(dcc_world).add_proposition(AGELESS)
+    proc = _run_wrapper(dcc_world, "status", "P1", "dormant", "--json")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["data"]["status"] == "dormant"
+
+
+def test_session_number_is_public_and_matches_the_private_accessor(dcc_world):
+    """Other modules must not reach through an underscore for this."""
+    from lib.session_manager import SessionManager
+    sm = SessionManager(dcc_world)
+    assert sm.session_number() == sm._get_session_number()
