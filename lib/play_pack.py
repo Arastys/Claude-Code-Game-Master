@@ -287,10 +287,16 @@ def apply_stage(campaign_dir, world_state_dir: Optional[str] = None) -> Dict[str
     npcs = _load_json(cdir, "npcs.json")
     created = {"location": room_key, "npcs": [], "exits": []}
 
+    room_desc = pack["primer"] or pack["hook"]
+    if pack["room"].strip() != room_key:
+        # room was prose beyond the derived key — keep the full text so nothing
+        # written there is lost. A short, well-formed room (room == room_key)
+        # must not gain a redundant repeat of its own name in the description.
+        room_desc = f'{pack["room"]}\n\n{room_desc}'
     _ensure_location(
         locations, room_key,
         pack.get("whose_story") or "opening stage",
-        f'{pack["room"]}\n\n{pack["primer"] or pack["hook"]}',
+        room_desc,
     )
     for exit_name in pack["exits"]:
         if _ensure_location(locations, exit_name, f"exit from {room_key}"):

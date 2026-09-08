@@ -45,3 +45,22 @@ def test_stage_keys_the_location_by_the_short_name(dcc_world):
 
     npcs = json.loads((cdir / "npcs.json").read_text(encoding="utf-8"))
     assert npcs["Nest"]["tags"]["locations"] == ["Y Bedd"]
+
+
+def test_a_well_formed_short_room_keeps_its_original_description(dcc_world):
+    """room == room_key already — the description must not gain a redundant
+    repeat of the room's own name (the constraint a short, well-formed room
+    passes through unchanged, applied to the description too)."""
+    cdir = Path(dcc_world) / "campaigns" / "dungeon-crawler-carl"
+    overview = json.loads((cdir / "campaign-overview.json").read_text(encoding="utf-8"))
+    overview["play_pack"] = {
+        "whose_story": "Eurgain", "room": "The Rusty Anchor", "present": [],
+        "exits": [], "hook": "the cup", "offstage": [], "primer": "start here",
+    }
+    (cdir / "campaign-overview.json").write_text(json.dumps(overview, indent=2),
+                                                 encoding="utf-8")
+    apply_stage(cdir)
+
+    locations = json.loads((cdir / "locations.json").read_text(encoding="utf-8"))
+    assert locations["The Rusty Anchor"]["description"] == "start here"
+    assert not locations["The Rusty Anchor"]["description"].startswith("The Rusty Anchor")
