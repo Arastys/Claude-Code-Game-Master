@@ -182,3 +182,137 @@ def test_a_kit_modeling_hp_as_a_bare_number_does_not_crash(tmp_path):
     line = _character_line(world)
     assert "HP: 30" in line
     assert "HP: 30/None" not in line
+
+
+NO_HP_RULESET = {
+    "name": "The Vein Court",
+    "kit": "custom",
+    "stat_schema": {
+        "attributes": ["poise", "cunning"],
+        "vitals": ["composure", "blood"],
+    },
+    "progression": {"model": "milestone"},
+    "resolution": {"model": "d20-vs-dc"},
+}
+
+
+def test_a_kit_declaring_no_hp_does_not_invent_it(tmp_path):
+    """FIX 2: WorldKit.vitals() only forces ['hp'] for an under-declared kit — a
+    kit that legitimately declares vitals without hp (composure/blood) must not
+    get an invented `HP: 0`."""
+    world = _world(tmp_path, "vein-court", NO_HP_RULESET, {
+        "name": "Rhiannon", "level": 0,
+        "composure": {"current": 3, "max": 4}, "blood": 7,
+    })
+    line = _character_line(world)
+    assert "HP" not in line
+    assert "Composure: 3/4" in line
+    assert "Blood: 7" in line
+
+
+def test_hp_still_shows_when_the_sheet_carries_it_even_if_undeclared(tmp_path):
+    """The gate is 'declared OR on the sheet' — an hp the kit doesn't declare but
+    the sheet already tracks must still be shown, never hidden either."""
+    world = _world(tmp_path, "vein-court", NO_HP_RULESET, {
+        "name": "Rhiannon", "level": 0, "hp": {"current": 5, "max": 5},
+        "composure": {"current": 3, "max": 4},
+    })
+    line = _character_line(world)
+    assert "HP: 5/5" in line
+
+
+GOLD_VITAL_RULESET = {
+    "name": "The Barter World",
+    "kit": "custom",
+    "stat_schema": {
+        "attributes": ["grit"],
+        "vitals": ["hp", "gold"],
+    },
+    "progression": {"model": "milestone"},
+    "resolution": {"model": "d20-vs-dc"},
+}
+
+
+def test_gold_declared_as_a_vital_renders_once(tmp_path):
+    """FIX 3: a world where coin is a resource meter declares `gold` as a vital;
+    the 5e-furniture block used to append a second, unconditional `Gold: 12`."""
+    world = _world(tmp_path, "barter-world", GOLD_VITAL_RULESET, {
+        "name": "A", "level": 1,
+        "hp": {"current": 5, "max": 5}, "gold": 12,
+    })
+    line = _character_line(world)
+    assert line.count("Gold") == 1
+    assert "Gold: 12" in line
+
+
+DUAL_BUCKET_RULESET = {
+    "name": "The Blood Ledger",
+    "kit": "custom",
+    "stat_schema": {
+        "attributes": ["grit"],
+        "vitals": ["hp", "blood"],
+        "traits": ["blood"],
+    },
+    "progression": {"model": "milestone"},
+    "resolution": {"model": "d20-vs-dc"},
+}
+
+
+def test_a_name_declared_in_both_vitals_and_traits_renders_once(tmp_path):
+    """FIX 3: a name declared in both buckets (e.g. `blood`) must emit once, not
+    once per bucket."""
+    world = _world(tmp_path, "blood-ledger", DUAL_BUCKET_RULESET, {
+        "name": "B", "level": 1,
+        "hp": {"current": 5, "max": 5}, "blood": 7,
+    })
+    line = _character_line(world)
+    assert line.count("Blood") == 1
+    assert "Blood: 7" in line
+
+
+AC_TRAIT_RULESET = {
+    "name": "The Armored Court",
+    "kit": "custom",
+    "stat_schema": {
+        "attributes": ["grit"],
+        "vitals": ["hp"],
+        "traits": ["ac"],
+    },
+    "progression": {"model": "milestone"},
+    "resolution": {"model": "d20-vs-dc"},
+}
+
+
+def test_a_trait_named_ac_does_not_collide_with_5e_furniture(tmp_path):
+    """FIX 3: a trait named `ac` used to render alongside the unconditional 5e
+    `AC:` furniture line — two label conventions for the same value."""
+    world = _world(tmp_path, "armored-court", AC_TRAIT_RULESET, {
+        "name": "C", "level": 1,
+        "hp": {"current": 5, "max": 5}, "ac": 14,
+    })
+    line = _character_line(world)
+    assert line.count("14") == 1
+
+
+RACE_TRAIT_RULESET = {
+    "name": "The Twice-Named",
+    "kit": "custom",
+    "stat_schema": {
+        "attributes": ["grit"],
+        "vitals": ["hp"],
+        "traits": ["race"],
+    },
+    "progression": {"model": "milestone"},
+    "resolution": {"model": "d20-vs-dc"},
+}
+
+
+def test_race_declared_as_a_trait_does_not_double_with_identity(tmp_path):
+    """FIX 3: `race` is already folded into the identity segment; declaring it
+    again as a trait must not print the value twice."""
+    world = _world(tmp_path, "twice-named", RACE_TRAIT_RULESET, {
+        "name": "D", "level": 1, "race": "Cimmerian",
+        "hp": {"current": 5, "max": 5},
+    })
+    line = _character_line(world)
+    assert line.count("Cimmerian") == 1

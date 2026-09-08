@@ -34,6 +34,27 @@ def test_dcc_context_kit_block_names_custom_d20_resource_axis(dcc_world):
     assert "resolution: d20-vs-dc" in kit
     assert "progression: resource-axis" in kit
     assert "vitals: hp" in kit
+    assert "traits: (none)" in kit
+
+
+def test_kit_block_lists_declared_traits(tmp_path):
+    """FIX 7: a declared-but-unset trait (e.g. `generation`) was completely
+    invisible — the CHARACTER line skips absent traits, and the KIT block never
+    named them at all. A GM should learn the world has a `generation` trait from
+    the ambient KIT block, not only when a sheet happens to carry one."""
+    world = _world(tmp_path, "slow-heart", {
+        "name": "The Slow Heart",
+        "kit": "custom",
+        "stat_schema": {
+            "attributes": ["strength"],
+            "vitals": ["hp", "blood"],
+            "traits": ["generation", "gift_tier"],
+        },
+        "progression": {"model": "milestone"},
+        "resolution": {"model": "d20-vs-dc"},
+    })
+    kit = _kit_section(SessionManager(world).get_full_context())
+    assert "traits: generation, gift_tier" in kit
 
 
 def test_dnd5e_kit_named_in_context(tmp_path):
