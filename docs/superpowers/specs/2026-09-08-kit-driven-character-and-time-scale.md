@@ -102,3 +102,29 @@ Every requirement is tested against **at least three kits** — `dnd5e`, the
 resource-axis DCC fixture, and a `custom` kit declaring extra vitals and traits — using
 the existing `_make_world(tmp_path, slug, ruleset)` builder in `tests/test_kit_vitals.py`.
 A change that only works for one of them has not met the bar.
+
+## Deferred follow-ups (found during this plan, ruled out of its scope)
+
+The CHARACTER brief was one of several surfaces rendering the same character.
+Fixing it exposed the siblings. Each is real, none belongs to this spec — Defect 1
+is scoped to the CHARACTER block, and widening it mid-branch is how a clean change
+becomes an incident. Verified in the source at the lines named, 2026-09-08.
+
+1. **`tools/gm-statusline.sh`** — the always-on HUD, still the same hardcoded
+   template (`.race // "?"`, `.ac // "?"`, `.gold // 0`). It is the surface the
+   player looks at most, and it is the last one still inventing placeholders.
+2. **`lib/session_manager.py:975-979`** — the party-member block, four invented
+   defaults (`hp` `{current:10,max:10}`, `ac` 10, `race` "Unknown", `class`
+   "Commoner") and the same `.get('hp', {})` crash on a scalar-hp sheet.
+3. **`lib/player_manager.py:712`** — `revive_character` reads
+   `char.get('hp', {}).get('max', 0)` and then `char['hp']['current'] = ...`.
+   Both raise on a kit that models hp as a bare number. Same class as the
+   `show_player` crash this plan fixed; the finding named only the two show
+   functions, so this one was missed at the time.
+4. **`lib/identity_onboarding.py:69`** — `from_canon` writes
+   `"ac": sheet.get("ac", 10)` unconditionally, so lifting a canon NPC to PC
+   invents an armour class on any kit. Same family as the `gold`/`xp`/`ac`
+   defaults fixed in `save_character.py`; a different write path entirely.
+
+Items 3 and 4 are one-line fixes with a test each. Items 1 and 2 are the same
+kit-driven render treatment this plan gave the CHARACTER block, applied twice more.
