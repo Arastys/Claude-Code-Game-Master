@@ -8,6 +8,7 @@ into the journal. from_book() writes exactly one name when play walks toward it.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -29,6 +30,22 @@ PACK_KEYS = (
     "offstage",
     "primer",
 )
+
+
+def _short_name(room: str, limit: int = 48) -> str:
+    """A matchable location key from a `room` that may have been written as prose.
+
+    play_pack.room is specified as "one street / room / deck", but it invites
+    description, and apply_stage used it verbatim as a location key AND as every
+    present NPC's location tag. npcs_present matches by exact equality, so a
+    paragraph made the whole staged cast unreachable. Splitting on the first
+    dash/comma/sentence break recovers the name a person would actually type,
+    and a short well-formed room passes through untouched.
+    """
+    head = re.split(r"\s+[—–-]\s+|[.,:;]", (room or "").strip(), maxsplit=1)[0].strip()
+    if not head:
+        head = (room or "").strip()[:limit].rstrip()
+    return head[:limit].rstrip() or "the stage"
 
 
 def empty_pack() -> Dict[str, Any]:
@@ -265,19 +282,20 @@ def apply_stage(campaign_dir, world_state_dir: Optional[str] = None) -> Dict[str
     if not pack["room"]:
         return {"ok": False, "error": "play_pack.room is empty"}
 
+    room_key = _short_name(pack["room"])
     locations = _load_json(cdir, "locations.json")
     npcs = _load_json(cdir, "npcs.json")
-    created = {"location": pack["room"], "npcs": [], "exits": []}
+    created = {"location": room_key, "npcs": [], "exits": []}
 
     _ensure_location(
-        locations, pack["room"],
+        locations, room_key,
         pack.get("whose_story") or "opening stage",
-        pack["primer"] or pack["hook"],
+        f'{pack["room"]}\n\n{pack["primer"] or pack["hook"]}',
     )
     for exit_name in pack["exits"]:
-        if _ensure_location(locations, exit_name, f"exit from {pack['room']}"):
+        if _ensure_location(locations, exit_name, f"exit from {room_key}"):
             created["exits"].append(exit_name)
-        _connect(locations, pack["room"], exit_name, "visible from here")
+        _connect(locations, room_key, exit_name, "visible from here")
 
     for name in pack["present"]:
         existing = resolve_or_merge_key(name, npcs)
@@ -286,7 +304,7 @@ def apply_stage(campaign_dir, world_state_dir: Optional[str] = None) -> Dict[str
                 "name": name,
                 "description": f"Present in {pack['room']}.",
                 "attitude": "neutral",
-                "tags": {"locations": [pack["room"]], "quests": []},
+                "tags": {"locations": [room_key], "quests": []},
             }
             created["npcs"].append(name)
         else:
@@ -295,7 +313,7 @@ def apply_stage(campaign_dir, world_state_dir: Optional[str] = None) -> Dict[str
             # of minting a descriptive near-duplicate. Guarded so a short present
             # entry never collapses onto a fleshed, distinct longer-named NPC.
             _merge_npc(npcs, existing, name, blurb="", attitude="",
-                       add_location=pack["room"])
+                       add_location=room_key)
 
     _save_json(cdir, "locations.json", locations)
     _save_json(cdir, "npcs.json", npcs)

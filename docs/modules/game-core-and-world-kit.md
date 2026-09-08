@@ -156,6 +156,29 @@ level-20 XP table. None of that exists in `game_core`. Loading them for a non-5e
 imports rules the world never declared. The routing rule — STEP-0 defers to the
 scene-context KIT block — is in [lean core and skill routing](../conventions/lean-core-and-skill-routing.md).
 
+## Rolling the declared systems
+
+`bash tools/gm-system.sh list` shows the kit's declared signature systems;
+`bash tools/gm-system.sh roll "<name>" [args]` executes one through its `game_core`
+primitive using the config stored in `ruleset.json`.
+
+| Primitive | Arguments |
+|---|---|
+| `named_track` | `--current N --delta N` |
+| `price_roll` | `--severity N [--modifier N]` |
+| `reaction_roll` | `--track-value N [--modifier N]` |
+| `guarded_payoff` | none |
+
+`--modifier` is a **per-attempt** bonus (practice, gear, standing) and overrides the
+stored config value. The primitives stay pure; this supplies only the arguments a
+static config cannot know.
+
+## Advancing a resource-axis kit
+
+`bash tools/gm-player.sh advance --amount N` adds to the kit's declared progression
+resource and reports any tier change, naming it from `progression.tier_names` when
+declared. `gm-player.sh xp` remains the xp-levels path.
+
 ## Related
 
 - [Player character](player-character.md) — where progression state is persisted
