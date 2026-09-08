@@ -137,3 +137,93 @@ def test_contested_lists_only_ground_two_factions_claim(dcc_world):
 
 def test_claim_on_an_unknown_faction_returns_none(dcc_world):
     assert FactionManager(dcc_world).claim("Nobody", CWM) is None
+
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _run_cli(world, *args):
+    env = dict(os.environ, GM_WORLD_STATE_BASE=str(world))
+    return subprocess.run(
+        [sys.executable, str(REPO_ROOT / "lib" / "faction_manager.py"), *args],
+        capture_output=True, text=True, env=env, cwd=str(REPO_ROOT))
+
+
+def test_set_relation_records_a_stance(dcc_world):
+    m = FactionManager(dcc_world)
+    m.add_faction(TITHE)
+    m.set_relation(TITHE, WOLVES, "hostile")
+    assert m.get_factions()[TITHE]["relations"][WOLVES] == "hostile"
+
+
+def test_render_shows_standing_and_territory(dcc_world):
+    m = FactionManager(dcc_world)
+    m.add_faction(TITHE, standing=2)
+    m.claim(TITHE, CWM)
+    m.add_member(TITHE, "Nest")
+    out = FactionManager.render(m.get_factions())
+    assert TITHE in out
+    assert "+2" in out
+    assert CWM in out
+    assert "Nest" in out
+
+
+def test_cli_list_emits_a_json_envelope(dcc_world):
+    FactionManager(dcc_world).add_faction(TITHE, standing=1)
+    proc = _run_cli(dcc_world, "list", "--json")
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["data"][TITHE]["standing"] == 1
+
+
+def test_cli_contested_reports_shared_ground(dcc_world):
+    m = FactionManager(dcc_world)
+    m.add_faction(TITHE); m.add_faction(WOLVES)
+    m.claim(TITHE, CWM); m.claim(WOLVES, CWM)
+    proc = _run_cli(dcc_world, "contested", "--json")
+    assert proc.returncode == 0, proc.stderr
+    assert sorted(json.loads(proc.stdout)["data"][CWM]) == sorted([TITHE, WOLVES])
+
+
+# --- Wrapper-level test (additional requirement, beyond the brief) ---
+#
+# The CLI tests above invoke lib/faction_manager.py directly via sys.executable,
+# which never touches tools/gm-faction.sh. That is not enough: a wrapper that
+# turned out to be a `case` dispatcher rather than a genuine `"$@"` pass-through
+# to the Python manager would print a usage banner and exit 0 while these tests
+# kept passing. Drive the real bash wrapper as a subprocess so a mis-wired
+# wrapper is actually caught — json.loads() below fails hard on a usage banner
+# instead of silently accepting it.
+
+
+def _run_wrapper(dcc_world, *args):
+    return subprocess.run(
+        ["bash", str(REPO_ROOT / "tools" / "gm-faction.sh"), *args],
+        capture_output=True, text=True,
+        env={**os.environ, "GM_WORLD_STATE_BASE": str(dcc_world)},
+        cwd=str(REPO_ROOT))
+
+
+def test_wrapper_list_reaches_the_python_manager(dcc_world):
+    FactionManager(dcc_world).add_faction(TITHE, standing=1)
+    proc = _run_wrapper(dcc_world, "list", "--json")
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["data"][TITHE]["standing"] == 1
+
+
+def test_wrapper_relation_reaches_the_python_manager(dcc_world):
+    FactionManager(dcc_world).add_faction(TITHE)
+    proc = _run_wrapper(dcc_world, "relation", TITHE, WOLVES, "hostile", "--json")
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["data"]["relations"][WOLVES] == "hostile"

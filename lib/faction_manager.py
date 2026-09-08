@@ -153,3 +153,99 @@ class FactionManager(EntityManager):
                 display.setdefault(key, str(place))
                 claimants.setdefault(key, []).append(name)
         return {display[k]: v for k, v in claimants.items() if len(v) > 1}
+
+    def set_relation(self, name: str, other: str,
+                     stance: str) -> Optional[Dict[str, Any]]:
+        data = self._load()
+        faction = data.get(name)
+        if faction is None:
+            return None
+        faction.setdefault("relations", {})[other] = stance
+        self._save(data)
+        return faction
+
+    @staticmethod
+    def render(factions: Dict[str, Any]) -> str:
+        """One line per faction for the GM-visible context."""
+        lines = []
+        for name, f in factions.items():
+            parts = [f"standing {int(f.get('standing', 0)):+d}"]
+            if f.get("territory"):
+                parts.append("holds: " + ", ".join(f["territory"]))
+            if f.get("members"):
+                parts.append("members: " + ", ".join(f["members"]))
+            for other, stance in (f.get("relations") or {}).items():
+                parts.append(f"vs {other}: {stance}")
+            lines.append(f"{name}: " + " | ".join(parts))
+        return "\n".join(lines)
+
+
+def main():
+    import argparse
+    import json
+    from cli_output import wants_json, strip_json_flag, emit, emit_error
+
+    parser = argparse.ArgumentParser(description="Factions")
+    sub = parser.add_subparsers(dest="action")
+
+    p = sub.add_parser("add"); p.add_argument("name")
+    p.add_argument("--standing", type=int, default=0); p.add_argument("--note")
+    p = sub.add_parser("standing"); p.add_argument("name")
+    p.add_argument("--set", dest="set_value", type=int)
+    p.add_argument("--delta", type=int)
+    p = sub.add_parser("member"); p.add_argument("name"); p.add_argument("npc")
+    p = sub.add_parser("unmember"); p.add_argument("name"); p.add_argument("npc")
+    p = sub.add_parser("claim"); p.add_argument("name"); p.add_argument("location")
+    p = sub.add_parser("release"); p.add_argument("name"); p.add_argument("location")
+    p = sub.add_parser("relation"); p.add_argument("name")
+    p.add_argument("other"); p.add_argument("stance")
+    p = sub.add_parser("holders"); p.add_argument("location")
+    sub.add_parser("contested")
+    p = sub.add_parser("remove"); p.add_argument("name")
+    sub.add_parser("list")
+
+    json_mode = wants_json()
+    args = parser.parse_args(strip_json_flag(sys.argv[1:]))
+    if not args.action:
+        parser.print_help(); sys.exit(1)
+
+    m = FactionManager()
+    if args.action == "add":
+        out = m.add_faction(args.name, standing=args.standing, note=args.note)
+    elif args.action == "standing":
+        if args.set_value is None and args.delta is None:
+            sys.exit(emit_error("pass --set or --delta", json_mode))
+        out = (m.set_standing(args.name, args.set_value) if args.set_value is not None
+               else m.adjust_standing(args.name, args.delta))
+    elif args.action == "member":
+        out = m.add_member(args.name, args.npc)
+    elif args.action == "unmember":
+        out = m.remove_member(args.name, args.npc)
+    elif args.action == "claim":
+        out = m.claim(args.name, args.location)
+    elif args.action == "release":
+        out = m.release(args.name, args.location)
+    elif args.action == "relation":
+        out = m.set_relation(args.name, args.other, args.stance)
+    elif args.action == "holders":
+        out = m.holders_of(args.location)
+    elif args.action == "contested":
+        out = m.contested()
+    elif args.action == "remove":
+        out = {"removed": m.remove_faction(args.name)}
+    else:
+        out = m.get_factions()
+
+    if out is None:
+        sys.exit(emit_error(f"no such faction: {args.name}", json_mode))
+
+    if json_mode:
+        emit(out, json_mode=True)
+    else:
+        print(json.dumps(out, indent=2))
+        if args.action == "list":
+            print(FactionManager.render(out))
+
+
+if __name__ == "__main__":
+    main()
