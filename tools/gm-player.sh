@@ -67,6 +67,12 @@ case "$ACTION" in
         $PYTHON_CMD "$LIB_DIR/player_manager.py" award "$@"
         ;;
 
+    "advance")
+        # Advance a resource-axis kit's progression (years, viewers, spice, ...).
+        # Name optional (defaults to active PC). Requires --amount (argparse-enforced).
+        $PYTHON_CMD "$LIB_DIR/player_manager.py" advance "$@"
+        ;;
+
     "level-check")
         if [ -z "$1" ]; then
             echo "Usage: gm-player.sh level-check <character_name>"
@@ -219,6 +225,7 @@ case "$ACTION" in
         echo "  set <name>                   - Set character as current active PC"
         echo "  xp <name> +<amount>          - Award XP to character"
         echo "  award [name] --tier T        - Spectacle XP for a clever/effective/unique/punishing beat (T=minor|major|legendary; --reason \"...\"; co-awards followers)"
+        echo "  advance [name] --amount N    - Advance a resource-axis kit's progression resource (years, viewers, spice, ...)"
         echo "  hp <name> <+/-amount>        - Modify character HP"
         echo "  vital <vital> <+/-N|set N>   - Read/change a kit vital (vigor, corruption, ...)"
         echo "  kill <name> [--cause ...]    - Mark PC dead (then run Death Protocol)"

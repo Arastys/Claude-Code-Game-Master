@@ -6,11 +6,15 @@ is hardcoded to the xp-levels threshold path, so a kit declaring
 """
 
 import json
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from lib.player_manager import PlayerManager
+
+ROOT = Path(__file__).resolve().parent.parent
 
 RULESET = {
     "name": "The Slow Heart",
@@ -70,3 +74,53 @@ def test_fails_cleanly_when_there_is_no_character(years_world):
     failure mode is having no character.json at all."""
     (Path(years_world) / "campaigns" / "dungeon-crawler-carl" / "character.json").unlink()
     assert PlayerManager(years_world).advance_resource(None, 1)["success"] is False
+
+
+def _advance(world, *args):
+    """Drive the real wrapper (not the manager directly) against a hermetic
+    world-state tree. The wrapper is a literal `case "$ACTION"` dispatcher, not
+    a "$@" pass-through — a missing arm falls to `*)`, prints the usage banner,
+    and exits 0, silently no-opping. Only a subprocess call through the wrapper
+    itself can catch that; calling PlayerManager directly cannot."""
+    return subprocess.run(
+        ["bash", str(ROOT / "tools" / "gm-player.sh"), "advance", *args],
+        capture_output=True, text=True,
+        env={**os.environ, "GM_WORLD_STATE_BASE": str(world)},
+    )
+
+
+def test_wrapper_advance_dispatches_to_the_python_manager(years_world):
+    """gm-player.sh had no "advance" arm: `bash tools/gm-player.sh advance
+    --amount 10` reported success (exit 0) and changed nothing. Assert both the
+    JSON envelope AND the on-disk effect, so a wrapper that merely echoes the
+    usage banner (also exit 0) cannot pass this test."""
+    r = _advance(years_world, "Rhiannon", "--amount", "10", "--json")
+    assert r.returncode == 0, r.stderr
+    d = json.loads(r.stdout)          # banner text is not valid JSON — fails pre-fix
+    assert d["ok"] is True
+    assert d["data"]["resource"] == "years"
+    assert d["data"]["before"] == 0
+    assert d["data"]["after"] == 10
+
+    saved = json.loads(
+        (Path(years_world) / "campaigns" / "dungeon-crawler-carl" / "character.json")
+        .read_text(encoding="utf-8")
+    )
+    assert saved["years"] == 10
+
+
+def test_wrapper_advance_human_mode(years_world):
+    r = _advance(years_world, "Rhiannon", "--amount", "25")
+    assert r.returncode == 0, r.stderr
+    assert "years: 0 -> 25" in r.stdout
+    assert "TIER CHANGE" in r.stdout
+
+
+def test_wrapper_advance_is_discoverable_in_usage(years_world):
+    """Added to the `*)` usage block so the new verb is discoverable."""
+    r2 = subprocess.run(
+        ["bash", str(ROOT / "tools" / "gm-player.sh"), "bogus-action"],
+        capture_output=True, text=True,
+        env={**os.environ, "GM_WORLD_STATE_BASE": str(years_world)},
+    )
+    assert "advance" in r2.stdout
