@@ -141,3 +141,34 @@ def test_tick_time_stops_at_full(dcc_world):
     assert m.is_full("Doom")
     # A full clock is a pending beat, not a re-ticking counter.
     assert "Doom" not in m.tick_time_clocks()
+
+
+# Elapsed durations must scale past a week. A campaign that skips decades of
+# practice and centuries of torpor could express neither: ticks_from_duration knew
+# only days and weeks, so "10 years" advanced clocks as far as waiting a moment.
+
+import pytest
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("3 days", 3),
+    ("2 weeks", 14),
+    ("1 month", 30),
+    ("6 months", 180),
+    ("1 year", 365),
+    ("10 years", 3650),
+    ("40 years of deliberate practice", 14600),
+])
+def test_durations_scale(text, expected):
+    assert ticks_from_duration(text) == expected
+
+
+def test_longest_unit_wins_when_several_appear():
+    """'2 years 3 months' is two years, not three months."""
+    assert ticks_from_duration("2 years 3 months") == 730
+
+
+def test_unparseable_duration_still_falls_back_to_one():
+    assert ticks_from_duration("a while later") == 1
+    assert ticks_from_duration("") == 1
+    assert ticks_from_duration(None) == 1

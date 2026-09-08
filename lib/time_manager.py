@@ -16,7 +16,16 @@ from json_ops import JsonOperations
 # minutes / hours / same-day time-of-day → 1
 # N day/days → N
 # N week/weeks → 7*N
+# N month/months → 30*N
+# N year/years → 365*N
 # anything else (including empty) → 1
+#
+# Large values are safe and intended: tick_time_clocks clamps with
+# min(max, current + ticks), skips already-full clocks, and fires each consequence
+# once on the fill transition. A decade-long skip filling every pending clock is the
+# truthful outcome of a decade passing, not an overflow to guard against.
+_DURATION_YEAR = re.compile(r"(\d+)\s*years?", re.IGNORECASE)
+_DURATION_MONTH = re.compile(r"(\d+)\s*months?", re.IGNORECASE)
 _DURATION_WEEK = re.compile(r"(\d+)\s*weeks?", re.IGNORECASE)
 _DURATION_DAY = re.compile(r"(\d+)\s*days?", re.IGNORECASE)
 
@@ -26,12 +35,11 @@ def ticks_from_duration(text: str) -> int:
     if not text or not str(text).strip():
         return 1
     s = str(text).strip()
-    m = _DURATION_WEEK.search(s)
-    if m:
-        return max(1, 7 * int(m.group(1)))
-    m = _DURATION_DAY.search(s)
-    if m:
-        return max(1, int(m.group(1)))
+    for pattern, factor in ((_DURATION_YEAR, 365), (_DURATION_MONTH, 30),
+                            (_DURATION_WEEK, 7), (_DURATION_DAY, 1)):
+        m = pattern.search(s)
+        if m:
+            return max(1, factor * int(m.group(1)))
     return 1
 
 
