@@ -890,21 +890,45 @@ class SessionManager(EntityManager):
         if char:
             name = char.get('name', 'Unknown')
             level = char.get('level', 1)
-            race = char.get('race', '?')
-            cls = char.get('class', '?')
             hp = char.get('hp', {})
             hp_cur = hp.get('current', 0)
             hp_max = hp.get('max', 0)
-            ac = char.get('ac', '?')
-            xp = char.get('xp', {})
-            if isinstance(xp, dict):
-                xp_val = xp.get('current', 0)
-            else:
-                xp_val = xp
-            gold = char.get('gold', 0)
             conditions = char.get('conditions', [])
             cond_str = ', '.join(conditions) if conditions else '(none)'
-            lines.append(f"{name} - Level {level} {race} {cls} | HP: {hp_cur}/{hp_max} | AC: {ac} | XP: {xp_val} | Gold: {gold}")
+
+            # Assembled from what the kit declares and the sheet actually carries —
+            # never a fixed template. The old line printed `?` for class and AC and an
+            # invented `Gold: 0` on worlds with no coinage, while hiding every kit
+            # vital beyond hp. `gm-player.sh show` has been kit-driven for some time;
+            # this block kept a divergent hardcoded copy.
+            from player_manager import PlayerManager
+
+            identity = f"{name} - Level {level}"
+            for key in ("race", "class"):
+                if char.get(key):
+                    identity += f" {char[key]}"
+            segments = [identity, f"HP: {hp_cur}/{hp_max}"]
+
+            declared = kit.vitals() if kit is not None else ["hp"]
+            for vital in declared:
+                if vital == "hp" or vital not in char:
+                    continue
+                cur, mx = PlayerManager._read_vital(char, vital)
+                label = vital.replace("_", " ").title()
+                segments.append(f"{label}: {cur}/{mx}" if mx is not None
+                                else f"{label}: {cur}")
+
+            # 5e sheet furniture: shown when the sheet carries it, never invented.
+            if "ac" in char:
+                segments.append(f"AC: {char['ac']}")
+            if "xp" in char:
+                raw = char["xp"]
+                segments.append(
+                    f"XP: {raw.get('current', 0) if isinstance(raw, dict) else raw}")
+            if "gold" in char:
+                segments.append(f"Gold: {char['gold']}")
+
+            lines.append(" | ".join(segments))
             lines.append(f"Conditions: {cond_str}")
         else:
             lines.append("No character found.")
