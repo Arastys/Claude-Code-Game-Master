@@ -75,6 +75,106 @@ class KnowledgeManager(EntityManager):
     def _stance_in(entry: Dict[str, Any], knower: str) -> str:
         return (KnowledgeManager._record_in(entry, knower) or {}).get("stance", UNAWARE)
 
+    @staticmethod
+    def relevant(propositions: Dict[str, Any], present,
+                 limit: int = BRIEF_LIMIT):
+        """(shown, dormant_count) — the active propositions this room can act on.
+
+        Relevant means someone in `present` holds a stance, or `about` names one
+        of them. Relevance is what keeps the block short enough to read every
+        beat: an active proposition concerning people who are nowhere near this
+        scene stays silent until they walk on.
+
+        Most recently touched first, ties broken by id so the order is stable
+        across runs.
+        """
+        present_norm = {_norm(p) for p in (present or []) if _norm(p)}
+        shown, dormant = [], 0
+        for pid, entry in (propositions or {}).items():
+            if _norm(entry.get("status", "active")) == "dormant":
+                dormant += 1
+                continue
+            holders = {_norm(k) for k in (entry.get("stances") or {})}
+            about = _norm(entry.get("about"))
+            if (holders & present_norm) or (about and about in present_norm):
+                shown.append((pid, entry))
+        shown.sort(key=lambda pe: (-int(pe[1].get("touched", 0) or 0), pe[0]))
+        return shown[:limit], dormant
+
+    @staticmethod
+    def render(propositions: Dict[str, Any], present, factions=None,
+               limit: int = BRIEF_LIMIT) -> str:
+        """The WHO KNOWS WHAT body, or "" when nothing qualifies.
+
+        `factions` is passed in rather than read here so this module never
+        touches another manager's file. It is only used to name a present member
+        who is unaware of what their own faction knows — the tension that makes
+        the leak visible. It never implies the member knows.
+        """
+        shown, dormant = KnowledgeManager.relevant(propositions, present, limit)
+        if not shown:
+            return ""
+
+        roster_base = [str(p) for p in (present or []) if str(p).strip()]
+        lines = []
+        for pid, entry in shown:
+            truth = entry.get("truth", "unresolved")
+            lines.append(
+                f'{pid}  "{entry.get("statement", "")}"  '
+                f'({"FALSE" if truth == "false" else truth})')
+
+            seen = {_norm(n) for n in roster_base}
+            roster = list(roster_base)
+            for holder in (entry.get("stances") or {}):
+                if _norm(holder) not in seen:
+                    roster.append(holder)
+                    seen.add(_norm(holder))
+            width = max(len(n) for n in roster)
+
+            for name in roster:
+                record = KnowledgeManager._record_in(entry, name)
+                if record is None:
+                    lines.append(f"    {name.ljust(width)}  {UNAWARE}")
+                    continue
+                stance = record.get("stance", UNAWARE)
+                label = "KNOWS" if stance == "knows" else stance
+                detail = f"s{record.get('since', 0)}"
+                if record.get("source"):
+                    detail += f", {record['source']}"
+                line = f"    {name.ljust(width)}  {label.ljust(8)} {detail}"
+                blind = KnowledgeManager._members_unaware(
+                    entry, name, stance, present, factions)
+                if blind:
+                    verb = "does not" if len(blind) == 1 else "do not"
+                    line += f"  — {', '.join(blind)} {verb}"
+                lines.append(line)
+
+        if dormant:
+            noun = "proposition" if dormant == 1 else "propositions"
+            lines.append(f"{dormant} dormant {noun} not shown.")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _members_unaware(entry, name, stance, present, factions):
+        """Present members of `name` (a faction that knows) who are unaware.
+
+        Reports the asymmetry. It never asserts that the member knows — that
+        would be the inheritance this system exists to refuse.
+        """
+        if stance != "knows" or not factions:
+            return []
+        faction = None
+        for fname, fdata in factions.items():
+            if _norm(fname) == _norm(name):
+                faction = fdata
+                break
+        if not isinstance(faction, dict):
+            return []
+        members = {_norm(x) for x in (faction.get("members") or [])}
+        return [str(p) for p in (present or [])
+                if _norm(p) in members
+                and KnowledgeManager._stance_in(entry, p) == UNAWARE]
+
     def add_proposition(self, statement: str, truth: str = "unresolved",
                         about: str = None, status: str = "active",
                         session: int = 0) -> Dict[str, Any]:

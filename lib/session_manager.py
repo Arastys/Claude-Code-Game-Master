@@ -1048,6 +1048,21 @@ class SessionManager(EntityManager):
                         if rem:
                             lines.append(f"  {rem}")
 
+        # --- Knowledge ledger (who has actually been told what; silent unless used) ---
+        knowledge = self.json_ops.load_json("knowledge.json") or {}
+        if knowledge.get("propositions"):
+            from knowledge_manager import KnowledgeManager
+            roster = [npc_name for npc_name, _ in present_npcs]
+            if isinstance(char, dict) and char.get("name"):
+                roster.append(char["name"])
+            block = KnowledgeManager.render(
+                knowledge["propositions"], roster,
+                factions=self.json_ops.load_json("factions.json") or {})
+            if block:
+                lines.append("")
+                lines.append("--- WHO KNOWS WHAT (present) ---")
+                lines.append(block)
+
         # --- Pending Consequences ---
         lines.append("")
         lines.append("--- PENDING CONSEQUENCES ---")
