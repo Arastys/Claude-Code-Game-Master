@@ -42,6 +42,20 @@ def test_nameless_has_zero_required_mechanics(dcc_world):
     assert char["attributes"] == {} and is_open_schema(char)
 
 
+def test_original_does_not_invent_gold_on_a_non_dnd5e_kit(dcc_world):
+    """gold is a 5e sheet convention (matches save_character.py's DND_SHEET_DEFAULTS
+    rule). The dcc_world fixture's ruleset.json has no "kit" field -> 'custom', so
+    inventing a gold field here would be a lie on a non-currency world."""
+    char = IdentityOnboarding(dcc_world).original("Vex", concept="a thief with a debt")
+    assert "gold" not in char["inventory"]
+    assert char["inventory"]["items"] == []
+
+
+def test_nameless_does_not_invent_gold_on_a_non_dnd5e_kit(dcc_world):
+    char = IdentityOnboarding(dcc_world).nameless()
+    assert "gold" not in char["inventory"]
+
+
 def test_characters_have_independent_vitals(dcc_world):
     # Regression: shared nested hp dict aliasing across characters.
     onb = IdentityOnboarding(dcc_world)

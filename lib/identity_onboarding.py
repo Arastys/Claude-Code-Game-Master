@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from entity_manager import EntityManager
 from character_schema import to_flat
+from world_kit import WorldKit
 
 
 def _default_vitals() -> Dict[str, Any]:
@@ -32,6 +33,19 @@ def _default_vitals() -> Dict[str, Any]:
 class IdentityOnboarding(EntityManager):
     def __init__(self, world_state_dir: str = None):
         super().__init__(world_state_dir)
+        self._wsd = world_state_dir
+        # gold is a 5e sheet convention, not a universal one — inventing it on a
+        # barter/Bronze-Age/no-currency kit is a lie. Matches save_character.py's
+        # rule (DND_SHEET_DEFAULTS): only the dnd5e kit gets an invented default.
+        self._is_dnd5e = WorldKit(self._wsd).kit() == 'dnd5e'
+
+    def _inventory(self, items) -> Dict[str, Any]:
+        """{"items": [...]}, plus a gold default only on the dnd5e kit."""
+        inv: Dict[str, Any] = {}
+        if self._is_dnd5e:
+            inv["gold"] = 0
+        inv["items"] = list(items)
+        return inv
 
     def from_canon(self, npc_name: str) -> Optional[Dict[str, Any]]:
         """Lift a canon character from npcs.json (stats from a sheet if present, voice from context).
@@ -55,7 +69,7 @@ class IdentityOnboarding(EntityManager):
             "vitals": {"hp": copy.deepcopy(sheet.get("hp", _default_vitals()["hp"])), "ac": sheet.get("ac", 10)},
             "attributes": dict(sheet.get("stats", {})),
             "progression": {"level": sheet.get("level", 1)},
-            "inventory": {"gold": 0, "items": list(sheet.get("equipment", []))},
+            "inventory": self._inventory(sheet.get("equipment", [])),
             "conditions": list(sheet.get("conditions", [])),
             "voice": npc.get("context", []),
             "origin": "canon",
@@ -67,7 +81,7 @@ class IdentityOnboarding(EntityManager):
             "vitals": _default_vitals(),
             "attributes": {},  # inferred silently against the active kit
             "progression": {"level": 1},
-            "inventory": {"gold": 0, "items": []},
+            "inventory": self._inventory([]),
             "conditions": [],
             "origin": "original",
         }
@@ -78,7 +92,7 @@ class IdentityOnboarding(EntityManager):
             "vitals": _default_vitals(),
             "attributes": {},
             "progression": {"level": 1},
-            "inventory": {"gold": 0, "items": []},
+            "inventory": self._inventory([]),
             "conditions": [],
             "origin": "nameless",
         }
