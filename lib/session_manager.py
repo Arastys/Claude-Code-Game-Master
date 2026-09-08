@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, str(Path(__file__).parent))
 
 from entity_manager import EntityManager, npcs_present
-from character_schema import to_flat
+from character_schema import to_flat, stat_label
 from schemas import PLOT_TYPE_SORT
 from world_kit import WorldKit
 
@@ -890,9 +890,6 @@ class SessionManager(EntityManager):
         if char:
             name = char.get('name', 'Unknown')
             level = char.get('level', 1)
-            hp = char.get('hp', {})
-            hp_cur = hp.get('current', 0)
-            hp_max = hp.get('max', 0)
             conditions = char.get('conditions', [])
             cond_str = ', '.join(conditions) if conditions else '(none)'
 
@@ -903,25 +900,32 @@ class SessionManager(EntityManager):
             # this block kept a divergent hardcoded copy.
             from player_manager import PlayerManager
 
+            # hp is a vital like any other: PlayerManager._read_vital already
+            # handles both the {current, max} dict shape and a bare-number track
+            # (max comes back None). hp keeps its dedicated segment (always shown,
+            # never skipped) rather than joining the declared-vitals loop below.
+            hp_cur, hp_max = PlayerManager._read_vital(char, 'hp')
+
             identity = f"{name} - Level {level}"
             for key in ("race", "class"):
                 if char.get(key):
                     identity += f" {char[key]}"
-            segments = [identity, f"HP: {hp_cur}/{hp_max}"]
+            hp_segment = f"HP: {hp_cur}/{hp_max}" if hp_max is not None else f"HP: {hp_cur}"
+            segments = [identity, hp_segment]
 
             declared = kit.vitals() if kit is not None else ["hp"]
             for vital in declared:
                 if vital == "hp" or vital not in char:
                     continue
                 cur, mx = PlayerManager._read_vital(char, vital)
-                label = vital.replace("_", " ").title()
+                label = stat_label(vital)
                 segments.append(f"{label}: {cur}/{mx}" if mx is not None
                                 else f"{label}: {cur}")
 
             for trait in (kit.traits() if kit is not None else []):
                 if trait not in char:
                     continue
-                segments.append(f"{trait.replace('_', ' ').title()}: {char[trait]}")
+                segments.append(f"{stat_label(trait)}: {char[trait]}")
 
             # 5e sheet furniture: shown when the sheet carries it, never invented.
             if "ac" in char:

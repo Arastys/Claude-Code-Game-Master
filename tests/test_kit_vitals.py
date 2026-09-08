@@ -30,6 +30,18 @@ HYBORIAN_RULESET = {
     "active_agents": [],
 }
 
+UNDERSCORE_RULESET = {
+    "name": "The Underscore World",
+    "kit": "custom",
+    "stat_schema": {
+        "attributes": [],
+        "vitals": ["hp", "mana_pool"],
+    },
+    "progression": {"model": "milestone"},
+    "resolution": {"model": "d20-vs-dc"},
+    "active_agents": [],
+}
+
 DND5E_RULESET = {
     "name": "Forgotten Realms",
     "kit": "dnd5e",
@@ -66,6 +78,11 @@ def _make_world(tmp_path, slug, ruleset):
 @pytest.fixture
 def hyborian_world(tmp_path):
     return _make_world(tmp_path, "hyborian", HYBORIAN_RULESET)
+
+
+@pytest.fixture
+def underscore_world(tmp_path):
+    return _make_world(tmp_path, "underscore", UNDERSCORE_RULESET)
 
 
 @pytest.fixture
@@ -147,6 +164,27 @@ def test_vitals_appear_in_show_output(hyborian_world):
     summary = mgr.show_player("Conan")
     assert "Vigor: 3/5" in summary and "Corruption: 1" in summary
     assert "Vigor: 3/5" in mgr.show_all_players()[0]
+
+
+def test_show_output_and_character_brief_agree_on_an_underscore_named_vital(underscore_world):
+    """Extra fix A: gm-player.sh show used vital.capitalize() ('Mana_pool'), the
+    CHARACTER brief used vital.replace('_', ' ').title() ('Mana Pool') — two
+    conventions for the same label. Both now go through the shared
+    character_schema.stat_label helper and must agree."""
+    r = _save(underscore_world, {
+        "name": "Vex", "level": 1, "attributes": {},
+        "hp": {"current": 10, "max": 10},
+        "mana_pool": {"current": 4, "max": 6},
+    })
+    assert r.returncode == 0, r.stdout + r.stderr
+
+    summary = PlayerManager(str(underscore_world)).show_player("Vex")
+    assert "Mana Pool: 4/6" in summary
+    assert "Mana_pool" not in summary
+
+    from lib.session_manager import SessionManager
+    ctx = SessionManager(str(underscore_world)).get_full_context()
+    assert "Mana Pool: 4/6" in ctx
 
 
 def test_undeclared_vital_is_refused(hyborian_world):

@@ -161,3 +161,24 @@ def test_a_kit_declaring_no_traits_is_unaffected(tmp_path):
         "generation": 5,  # on the sheet but NOT declared -> not rendered
     })
     assert "Generation" not in _character_line(world)
+
+
+SCALAR_HP_RULESET = {
+    "name": "The Flat Track",
+    "kit": "custom",
+    "stat_schema": {"attributes": [], "vitals": ["hp"]},
+    "progression": {"model": "milestone"},
+    "resolution": {"model": "d20-vs-dc"},
+}
+
+
+def test_a_kit_modeling_hp_as_a_bare_number_does_not_crash(tmp_path):
+    """Extra fix B: hp used to assume {current, max}; a scalar hp track crashed
+    with AttributeError even though _read_vital already supports scalars for
+    every other vital."""
+    world = _world(tmp_path, "flat-track", SCALAR_HP_RULESET, {
+        "name": "Nomad", "level": 2, "hp": 30,
+    })
+    line = _character_line(world)
+    assert "HP: 30" in line
+    assert "HP: 30/None" not in line
