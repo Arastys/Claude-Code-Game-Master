@@ -126,7 +126,7 @@ A block appended near NPC VOICES, silent when the ledger holds nothing:
 P4  "Rhiannon does not age"  (true)
     Mair          KNOWS      s5, told by Eurgain
     Gwen          unaware
-    Y Bleiddiaid  KNOWS   - Mair's own kin do not
+    Y Bleiddiaid  KNOWS      s1, long before she was born  — Mair does not
 P7  "the child drowned"  (FALSE)
     Mair          KNOWS      s2, told by Rhiannon
     Gwen          suspects   s6, observed
@@ -138,9 +138,16 @@ NPC holds a stance on it, or its `about` entity is present. Relevance is what ma
 block short — an active proposition concerning people who are nowhere near this scene
 stays silent until they walk on.
 
-Within that set, the five most recently touched are shown. Every present NPC renders
-under each shown proposition, defaulting to `unaware`. Dormant propositions stay in the
-ledger and surface on query.
+Within that set, the five most recently touched are shown. Under each, the roster is
+every present NPC, the player character, and any other entity holding a stance —
+that last group is how a faction or an absent witness appears at all. Anyone in the
+roster with no stance renders as `unaware`. Dormant propositions stay in the ledger and
+surface on query, and the block reports how many there are.
+
+The member-versus-faction annotation is generated, not decorative. When a faction holds
+`knows` and a present NPC belongs to that faction but is `unaware`, the faction's line
+names them. Membership comes from `factions.json`, passed in by the caller so the
+knowledge module never reads another manager's file.
 
 The block must be in the brief rather than available on demand. A discipline tool that
 catches the GM only when the GM remembers to ask fails at exactly the moment it exists
