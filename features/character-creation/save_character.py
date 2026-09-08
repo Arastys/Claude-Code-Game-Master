@@ -145,18 +145,26 @@ def save_character(character_data):
         "skills": character_data.get('skills', {}),
         "equipment": character_data.get('equipment', []),
         "features": character_data.get('features', []),
-        "background": character_data.get('background', ''),
-        "alignment": character_data.get('alignment', ''),
-        "bonds": character_data.get('bonds', ''),
-        "flaws": character_data.get('flaws', ''),
-        "ideals": character_data.get('ideals', ''),
-        "traits": character_data.get('traits', ''),
         "notes": character_data.get('notes', []),
-        "gold": character_data.get('gold', 0),
-        "xp": character_data.get('xp', {"current": 0, "next_level": 300}),
         # Canonical look-of-the-character for consistent image generation.
         "visual_appearance": va_mod.normalize(character_data.get('visual_appearance'))
     }
+
+    # 5e sheet furniture. On a dnd5e kit these always exist with their defaults;
+    # on any other kit they appear only when the author actually supplied them —
+    # an invented `gold` is a lie on a barter world, and an invented `xp` object
+    # contradicts PlayerManager._xp_view, which refuses to let a milestone sheet
+    # "grow a phantom xp object just because something read it".
+    DND_SHEET_DEFAULTS = {
+        'gold': 0, 'xp': {"current": 0, "next_level": 300},
+        'background': '', 'alignment': '', 'bonds': '',
+        'flaws': '', 'ideals': '', 'traits': '',
+    }
+    for field, default in DND_SHEET_DEFAULTS.items():
+        if field in character_data:
+            character[field] = character_data[field]
+        elif is_dnd5e:
+            character[field] = default
 
     # 5e saving throws only exist in a 5e world; elsewhere keep whatever was authored.
     if is_dnd5e:
