@@ -170,9 +170,10 @@ def test_relevant_reports_the_shown_set_and_the_dormant_count(dcc_world):
     m.add_proposition(AGELESS)
     m.set_stance("P1", "Mair", "knows")
     m.add_proposition(DROWNED, status="dormant")
-    shown, dormant = KnowledgeManager.relevant(m.get_propositions(), ["Mair"])
+    shown, dormant, cut = KnowledgeManager.relevant(m.get_propositions(), ["Mair"])
     assert [pid for pid, _ in shown] == ["P1"]
     assert dormant == 1
+    assert cut == 0
 
 
 # --- In the scene brief, across three kits ---
@@ -236,5 +237,51 @@ def test_ties_on_touched_order_numerically_not_lexicographically(dcc_world):
                        "status": "active", "touched": 3,
                        "stances": {"Mair": {"stance": "knows", "since": 3}}}
              for i in range(6, 12)}
-    shown, _ = KnowledgeManager.relevant(props, ["Mair"])
+    shown, _, _ = KnowledgeManager.relevant(props, ["Mair"])
     assert [pid for pid, _ in shown] == ["P6", "P7", "P8", "P9", "P10"]
+
+
+def test_the_cap_discloses_its_remainder_rather_than_truncating_silently(dcc_world):
+    """The brief-wide rule from docs/modules/scene-context.md: every truncation
+    prints `+N more <noun> — <how to see the rest>`. Silently dropping the tail is
+    exactly the failure this block exists to prevent, applied to itself."""
+    m = KnowledgeManager(dcc_world)
+    for i in range(7):
+        m.add_proposition(f"thing {i}")
+        m.set_stance(f"P{i + 1}", "Mair", "knows", session=i)
+    out = KnowledgeManager.render(m.get_propositions(), ["Mair"])
+    assert "+2 more propositions — --full or gm-know.sh list --active" in out
+
+
+def test_one_hidden_proposition_is_singular(dcc_world):
+    m = KnowledgeManager(dcc_world)
+    for i in range(6):
+        m.add_proposition(f"thing {i}")
+        m.set_stance(f"P{i + 1}", "Mair", "knows", session=i)
+    out = KnowledgeManager.render(m.get_propositions(), ["Mair"])
+    assert "+1 more proposition — " in out
+
+
+def test_full_lifts_the_cap_and_drops_the_remainder_line(dcc_world):
+    m = KnowledgeManager(dcc_world)
+    for i in range(7):
+        m.add_proposition(f"thing {i}")
+        m.set_stance(f"P{i + 1}", "Mair", "knows", session=i)
+    out = KnowledgeManager.render(m.get_propositions(), ["Mair"], full=True)
+    for i in range(7):
+        assert f"thing {i}" in out
+    assert "more proposition" not in out
+
+
+def test_full_context_threads_full_into_the_knowledge_block(tmp_path):
+    """--full must lift this bound like every other one in the brief."""
+    world = _world_with_npcs(tmp_path, "custom-kit", MILESTONE_RULESET,
+                             {"Mair": _npc()})
+    m = KnowledgeManager(world)
+    for i in range(7):
+        m.add_proposition(f"thing {i}")
+        m.set_stance(f"P{i + 1}", "Mair", "knows", session=i)
+    assert "more propositions" in SessionManager(world).get_full_context()
+    full = SessionManager(world).get_full_context(full=True)
+    assert "more propositions" not in full
+    assert "thing 0" in full

@@ -413,3 +413,20 @@ def test_claude_md_routes_information_changes_to_the_ledger():
     body = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     assert "gm-know.sh" in body
     assert "gm-knowledge" in body
+
+
+def test_knowledge_json_is_in_the_snapshot_contract():
+    """A save that omits the ledger restores a world where an NPC still holds
+    `knows` on something the restored state never told them — this system's own
+    failure mode, arriving through the save system instead of through the GM."""
+    from lib.session_manager import SessionManager
+    assert "knowledge.json" in SessionManager.SNAPSHOT_JSON_FILES
+    assert "knowledge.json" in SessionManager.CONTRACT_FILES
+
+
+def test_reset_clears_the_knowledge_ledger():
+    """Stale propositions naming deleted NPCs would render into a new campaign's
+    brief. factions.json is cleared for the weaker version of this reason."""
+    body = (REPO_ROOT / "tools" / "gm-reset.sh").read_text(encoding="utf-8")
+    story_block = body.split("STORY_FILES=(")[1].split(")")[0]
+    assert "knowledge.json" in story_block

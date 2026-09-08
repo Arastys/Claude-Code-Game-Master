@@ -43,6 +43,9 @@ ARCHIVE_BASE="$WORLD_STATE_BASE/archive"
 #                    to exist, deleted when it is created lazily. world-tracks.json
 #                    and factions.json are cleared too: a roster naming NPCs and
 #                    locations that reset just deleted is worse than an empty one.
+#                    knowledge.json likewise, and more urgently — it renders into
+#                    the scene brief, so a stale proposition naming a deleted NPC
+#                    would surface at the table rather than just sit in a file.
 STORY_FILES=(
     plots.json
     items.json
@@ -51,6 +54,7 @@ STORY_FILES=(
     threat-clocks.json
     world-tracks.json
     factions.json
+    knowledge.json
     world-tick-log.json
     loremaster-cache.json
 )

@@ -36,9 +36,10 @@ no history, threads, clocks, voice, or rules. Narrating a scene generally wants 
 `get_full_context` (`lib/session_manager.py:592`) assembles, in order: header (campaign, session #, location, time) ·
 **KIT** · **PRIMER** (play pack, when set) · play style (pacing, action menu, player-rolls dice, RAG inspiration) · **failure (one informing sentence)** · scene-image gate + chronicler · **narrative voice** · **world index** ·
 **previously on** + where-we-paused + open threads · **the world remembers** · story threads · **ready threads** (dormant seeded plots whose linked NPC/place is now present, or whose clock matured) · key facts · threat
-clocks · **world tracks** · **factions** · character · party members · **NPC voices** · pending consequences · **your
-world's rules** · **signature systems** (executable kit primitives — `WorldKit.systems()`,
-rendered "ROLL these", distinct from the prose rules block).
+clocks · **world tracks** · **factions** · character · party members · **NPC voices** · **who knows what** (propositions
+relevant to whoever is present, each with every roster name's stance; absent entirely when the ledger holds nothing
+relevant) · pending consequences · **your world's rules** · **signature systems** (executable kit primitives —
+`WorldKit.systems()`, rendered "ROLL these", distinct from the prose rules block).
 
 Several of those blocks carry design decisions that are not obvious from reading them:
 

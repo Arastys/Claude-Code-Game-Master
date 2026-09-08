@@ -92,15 +92,18 @@ class KnowledgeManager(EntityManager):
     @staticmethod
     def relevant(propositions: Dict[str, Any], present,
                  limit: int = BRIEF_LIMIT):
-        """(shown, dormant_count) — the active propositions this room can act on.
+        """(shown, dormant_count, cut_count) — the active propositions this room
+        can act on.
 
         Relevant means someone in `present` holds a stance, or `about` names one
         of them. Relevance is what keeps the block short enough to read every
         beat: an active proposition concerning people who are nowhere near this
         scene stays silent until they walk on.
 
-        Most recently touched first, ties broken by id so the order is stable
-        across runs.
+        Most recently touched first, ties broken numerically by id so the order is
+        stable across runs. `limit=None` applies no cap. `cut_count` is how many
+        relevant propositions the cap dropped, so the caller can disclose the
+        remainder instead of truncating in silence.
         """
         present_norm = {_norm(p) for p in (present or []) if _norm(p)}
         shown, dormant = [], 0
@@ -114,19 +117,26 @@ class KnowledgeManager(EntityManager):
                 shown.append((pid, entry))
         shown.sort(key=lambda pe: (-int(pe[1].get("touched", 0) or 0),
                                    _id_order(pe[0])))
-        return shown[:limit], dormant
+        if limit is None:
+            return shown, dormant, 0
+        return shown[:limit], dormant, max(0, len(shown) - limit)
 
     @staticmethod
     def render(propositions: Dict[str, Any], present, factions=None,
-               limit: int = BRIEF_LIMIT) -> str:
+               limit: int = BRIEF_LIMIT, full: bool = False) -> str:
         """The WHO KNOWS WHAT body, or "" when nothing qualifies.
 
         `factions` is passed in rather than read here so this module never
         touches another manager's file. It is only used to name a present member
         who is unaware of what their own faction knows — the tension that makes
         the leak visible. It never implies the member knows.
+
+        `full=True` lifts the cap, matching the brief-wide rule that --full lifts
+        every bound. When the cap does bite, the remainder is disclosed rather
+        than dropped in silence.
         """
-        shown, dormant = KnowledgeManager.relevant(propositions, present, limit)
+        shown, dormant, cut = KnowledgeManager.relevant(
+            propositions, present, None if full else limit)
         if not shown:
             return ""
 
@@ -164,6 +174,14 @@ class KnowledgeManager(EntityManager):
                     line += f"  — {', '.join(blind)} {verb}"
                 lines.append(line)
 
+        if cut:
+            # Same shape as SessionManager._remainder. Kept local rather than
+            # imported, so this module stays free of session_manager the way it
+            # stays free of faction_manager; the format is pinned by a test so
+            # the two cannot drift apart unnoticed.
+            noun = "proposition" if cut == 1 else "propositions"
+            lines.append(
+                f"+{cut} more {noun} — --full or gm-know.sh list --active")
         if dormant:
             noun = "proposition" if dormant == 1 else "propositions"
             lines.append(f"{dormant} dormant {noun} not shown.")

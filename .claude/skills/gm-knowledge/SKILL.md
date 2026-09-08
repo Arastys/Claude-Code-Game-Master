@@ -30,16 +30,16 @@ Write a stance the moment the fiction moves information, before you narrate:
 
 | What happened | Command |
 |---|---|
-| Someone witnessed it | `gm-know.sh stance P4 "Mair" knows --source "saw it at the ford"` |
-| Someone was told | `gm-know.sh stance P4 "Mair" knows --source "told by Eurgain"` |
-| Someone half-caught it | `gm-know.sh stance P4 "Gwen" suspects --source "overheard"` |
-| A new secret enters play | `gm-know.sh add "<the claim>" --truth true --about "Rhiannon"` |
-| Someone believes a lie | `gm-know.sh add "<the lie>" --truth false` then a `knows` stance on the dupe |
-| They were wrong, or it was retconned | `gm-know.sh forget P4 "Mair"` |
-| The thread is spent | `gm-know.sh status P4 dormant` |
+| Someone witnessed it | `bash tools/gm-know.sh stance P4 "Mair" knows --source "saw it at the ford"` |
+| Someone was told | `bash tools/gm-know.sh stance P4 "Mair" knows --source "told by Eurgain"` |
+| Someone half-caught it | `bash tools/gm-know.sh stance P4 "Gwen" suspects --source "overheard"` |
+| A new secret enters play | `bash tools/gm-know.sh add "<the claim>" --truth true --about "Rhiannon"` |
+| Someone believes a lie | `bash tools/gm-know.sh add "<the lie>" --truth false` then a `knows` stance on the dupe |
+| They were wrong, or it was retconned | `bash tools/gm-know.sh forget P4 "Mair"` |
+| The thread is spent | `bash tools/gm-know.sh status P4 dormant` |
 
-Before a scene where it matters: `gm-know.sh who-knows "<substring>"` for one
-proposition, `gm-know.sh held-by "Mair"` for one person.
+Before a scene where it matters: `bash tools/gm-know.sh who-knows "<substring>"` for one
+proposition, `bash tools/gm-know.sh held-by "Mair"` for one person.
 
 **Do not seed a ledger ahead of play.** Same rule as the anti-gazetteer rule for
 locations: a proposition exists once it is in play, not because it might be later.

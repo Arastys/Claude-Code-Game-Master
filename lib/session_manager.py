@@ -53,6 +53,7 @@ class SessionManager(EntityManager):
         "threat-clocks.json",
         "world-tracks.json",
         "factions.json",
+        "knowledge.json",
         "campaign-memory.json",
         "chronicler.json",
         "world-tick-log.json",
@@ -1057,7 +1058,8 @@ class SessionManager(EntityManager):
                 roster.append(char["name"])
             block = KnowledgeManager.render(
                 knowledge["propositions"], roster,
-                factions=self.json_ops.load_json("factions.json") or {})
+                factions=self.json_ops.load_json("factions.json") or {},
+                full=full)
             if block:
                 lines.append("")
                 lines.append("--- WHO KNOWS WHAT (present) ---")
