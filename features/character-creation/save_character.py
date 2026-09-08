@@ -178,6 +178,15 @@ def save_character(character_data):
         if vital != 'hp' and vital in character_data:
             character[vital] = character_data[vital]
 
+    # Kit traits (a generation, a lineage, a caste, ...) are fixed properties the
+    # engine never interprets — carry through whatever the kit declares and the
+    # author supplied. Without this loop a declared trait had no supported write
+    # path at all: not a vital (gm-player.sh vital refuses it), not the active-PC
+    # selector (gm-player.sh set), so hand-editing character.json was the only way.
+    for trait in kit.traits():
+        if trait in character_data:
+            character[trait] = character_data[trait]
+
     # Get the active campaign directory
     campaign_mgr = CampaignManager()
     campaign_dir = campaign_mgr.get_active_campaign_dir()
@@ -193,7 +202,7 @@ def save_character(character_data):
         file_path = characters_dir / f"{char_id}.json"
 
     try:
-        with open(file_path, 'w') as f:
+        with open(file_path, 'w', encoding="utf-8") as f:
             json.dump(character, f, indent=2)
 
         return {

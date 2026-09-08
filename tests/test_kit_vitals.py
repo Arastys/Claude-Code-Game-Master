@@ -54,6 +54,19 @@ DND5E_RULESET = {
     "active_agents": [],
 }
 
+TRAIT_RULESET = {
+    "name": "The Slow Heart",
+    "kit": "custom",
+    "stat_schema": {
+        "attributes": ["strength", "dexterity", "stamina"],
+        "vitals": ["hp", "blood"],
+        "traits": ["generation", "gift_tier"],
+    },
+    "progression": {"model": "milestone"},
+    "resolution": {"model": "d20-vs-dc"},
+    "active_agents": [],
+}
+
 CONAN = {
     "name": "Conan",
     "race": "Cimmerian",
@@ -88,6 +101,11 @@ def underscore_world(tmp_path):
 @pytest.fixture
 def dnd_world(tmp_path):
     return _make_world(tmp_path, "forgotten-realms", DND5E_RULESET)
+
+
+@pytest.fixture
+def slow_heart_world(tmp_path):
+    return _make_world(tmp_path, "slow-heart", TRAIT_RULESET)
 
 
 def _save(world, payload):
@@ -254,3 +272,74 @@ def test_non_dnd5e_missing_hp_warns_and_defaults_to_10(hyborian_world):
     assert isinstance(warnings, list) and warnings
     assert any("10/10" in w for w in warnings)
     assert any("author" in w.lower() for w in warnings)
+
+
+def test_declared_traits_persist_through_the_real_write_path(slow_heart_world):
+    """FIX 1: a declared trait (generation, gift_tier) had no supported write
+    path — save_character.py carried vitals but had no `kit.traits()` sibling,
+    so an authored trait was silently dropped. This goes through the real
+    save_character.py subprocess (not a hand-written character.json) to prove
+    the write path itself, not just a hand-authored fixture."""
+    r = _save(slow_heart_world, {
+        "name": "Rhiannon", "level": 0,
+        "attributes": {"strength": 2, "dexterity": 3, "stamina": 2},
+        "hp": {"current": 30, "max": 30}, "blood": 7,
+        "generation": 5, "gift_tier": 1,
+    })
+    assert r.returncode == 0, r.stdout + r.stderr
+    sheet = _sheet(slow_heart_world)
+    assert sheet["generation"] == 5
+    assert sheet["gift_tier"] == 1
+    assert sheet["blood"] == 7   # the sibling vitals loop still works alongside it
+
+
+SCALAR_HP_RULESET = {
+    "name": "The Flat Track",
+    "kit": "custom",
+    "stat_schema": {"attributes": [], "vitals": ["hp"]},
+    "progression": {"model": "milestone"},
+    "resolution": {"model": "d20-vs-dc"},
+    "active_agents": [],
+}
+
+
+@pytest.fixture
+def flat_track_world(tmp_path):
+    return _make_world(tmp_path, "flat-track", SCALAR_HP_RULESET)
+
+
+def test_show_player_survives_a_scalar_hp_sheet(flat_track_world):
+    """FIX 5: show_player/show_all_players did `char.get('hp', {}).get('current')`,
+    which raises AttributeError on a scalar hp track like {"name": "Nomad",
+    "hp": 30} — exactly the shape the CHARACTER brief already handles via
+    PlayerManager._read_vital.
+
+    Written directly to character.json rather than through save_character.py:
+    resolve_hp there always normalizes an authored scalar into a {current, max}
+    dict, so it can never itself produce the bare shape this bug is about.
+    """
+    char_path = flat_track_world / "campaigns" / "flat-track" / "character.json"
+    char_path.write_text(json.dumps({"name": "Nomad", "level": 2, "hp": 30}),
+                          encoding="utf-8")
+
+    mgr = PlayerManager(str(flat_track_world))
+    summary = mgr.show_player("Nomad")
+    assert summary is not None
+    assert "HP: 30" in summary
+    assert "HP: 30/None" not in summary and "HP: 30/0" not in summary
+
+    all_summary = mgr.show_all_players()[0]
+    assert "HP: 30" in all_summary
+
+
+def test_undeclared_field_is_not_carried_as_a_trait(slow_heart_world):
+    """Only traits the kit actually declares are carried — an arbitrary extra
+    field on the payload is not a catch-all passthrough."""
+    r = _save(slow_heart_world, {
+        "name": "Rhiannon", "level": 0,
+        "attributes": {"strength": 2, "dexterity": 3, "stamina": 2},
+        "hp": {"current": 30, "max": 30},
+        "favorite_color": "black",
+    })
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "favorite_color" not in _sheet(slow_heart_world)

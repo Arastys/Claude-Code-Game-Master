@@ -182,9 +182,10 @@ class PlayerManager(EntityManager):
             print(f"[ERROR] Character '{name}' not found")
             return None
 
-        hp = char.get('hp', {})
+        hp_cur, hp_max = self._read_vital(char, 'hp')
+        hp_str = f"{hp_cur}/{hp_max}" if hp_max is not None else f"{hp_cur}"
         gold = char.get('gold', 0)
-        summary = f"{char.get('name', name)} - {char.get('race', '?')} {char.get('class', '?')} Level {char.get('level', 1)} (HP: {hp.get('current', 0)}/{hp.get('max', 0)}, Gold: {gold})"
+        summary = f"{char.get('name', name)} - {char.get('race', '?')} {char.get('class', '?')} Level {char.get('level', 1)} (HP: {hp_str}, Gold: {gold})"
         summary += self._vitals_summary(char)
         status = char.get('status')
         if status in ('dying', 'dead'):
@@ -199,10 +200,11 @@ class PlayerManager(EntityManager):
         char = self._load_character()
         if not char:
             return []
-        hp = char.get('hp', {})
+        hp_cur, hp_max = self._read_vital(char, 'hp')
+        hp_str = f"{hp_cur}/{hp_max}" if hp_max is not None else f"{hp_cur}"
         gold = char.get('gold', 0)
         return [
-            f"{char.get('name', 'Unknown')} - {char.get('race', '?')} {char.get('class', '?')} Level {char.get('level', 1)} (HP: {hp.get('current', 0)}/{hp.get('max', 0)}, Gold: {gold})"
+            f"{char.get('name', 'Unknown')} - {char.get('race', '?')} {char.get('class', '?')} Level {char.get('level', 1)} (HP: {hp_str}, Gold: {gold})"
             + self._vitals_summary(char)
         ]
 
