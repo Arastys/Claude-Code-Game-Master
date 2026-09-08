@@ -67,3 +67,21 @@ def test_remove_faction(dcc_world):
     m.add_faction(TITHE)
     assert m.remove_faction(TITHE) is True
     assert m.remove_faction(TITHE) is False
+
+
+def test_add_faction_resets_an_existing_faction(dcc_world):
+    """add_faction is create-or-reset, matching add_clock/add_track behavior.
+
+    Calling add_faction on an existing name unconditionally wipes members,
+    territory, and relations. This makes the contract explicit and guards against
+    accidental upsert semantics in refactors.
+    """
+    m = FactionManager(dcc_world)
+    m.add_faction(TITHE)
+    m.add_member(TITHE, "Aeron")
+    assert m.get_factions()[TITHE]["members"] == ["Aeron"]
+
+    # Calling add_faction on the same name resets it
+    m.add_faction(TITHE)
+    assert m.get_factions()[TITHE]["members"] == []
+    assert m.get_factions()[TITHE]["standing"] == 0

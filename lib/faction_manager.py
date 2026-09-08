@@ -29,12 +29,12 @@ def _clamp_standing(value: Any) -> int:
 
 def _has_ci(items: List[Any], value: str) -> bool:
     """Case-insensitive membership, matching entity_manager.npcs_present."""
-    needle = (value or "").strip().lower()
+    needle = str(value or "").strip().lower()
     return any(str(i).strip().lower() == needle for i in (items or []))
 
 
 def _without_ci(items: List[Any], value: str) -> List[Any]:
-    needle = (value or "").strip().lower()
+    needle = str(value or "").strip().lower()
     return [i for i in (items or []) if str(i).strip().lower() != needle]
 
 
@@ -54,6 +54,7 @@ class FactionManager(EntityManager):
 
     def add_faction(self, name: str, standing: int = 0,
                     note: str = None) -> Dict[str, Any]:
+        """Create or reset a faction. Matches add_clock/add_track: create-or-reset, not upsert."""
         data = self._load()
         entry = {
             "standing": _clamp_standing(standing),
