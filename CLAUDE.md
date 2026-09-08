@@ -110,6 +110,7 @@ grounded source passages.
 - **Async plot planning — don't break narration to plan.** When you spot a long-game opportunity mid-scene and don't want to stop narrating, **spawn the `plot-weaver` agent IN THE BACKGROUND** (Agent tool, `run_in_background: true`) with a one-line seed. It grounds the idea in RAG, weaves it onto EXISTING entities/factions/clocks (via the WORLD INDEX), and persists **one dormant thread** — a `gm-plot.sh add` plot + a linked clock + an on-contact surfacing trigger — then returns one line you drop later. Keep narrating. The dormant thread stays out of the way and **resurfaces on its own** under `--- READY THREADS ---` when its NPC/place comes into play or its clock matures; `gm-plot.sh update` wakes it. Inline fallback (no background): `gm-plot.sh add "<name>" --status dormant …` + `gm-clock.sh add … --linked-plot "<name>"`. Still ONE grounded thread — never a gazetteer.
 - **Reactivity:** `gm-session.sh move` / `gm-time.sh` auto-run `gm-consequence.sh tick` — consequences whose triggers match fire (with a reason; veto for timing). `gm-consequence.sh log` / `rollback` for provenance.
 - **Threat clocks:** `gm-clock.sh` — named pressure. Time-clocks auto-advance on `gm-time.sh`; event clocks advance by hand (`gm-clock.sh advance`). A full clock is a beat due (`gm-clock.sh beats`); record a dramatic-choice fork with `gm-clock.sh choose`.
+- **World tracks & factions:** `gm-track.sh` moves a world-level meter when the fiction moves it (something witnessed, a body found, someone survived) — not on a timer, unlike a clock. `gm-faction.sh standing` shifts on social outcomes (a bargain kept, a betrayal); contested ground (`gm-faction.sh contested`) is a story seed to pull on, not just data to report.
 - **Memory:** `gm-recall.sh recall "..."` surfaces prior events (memory refreshes on save). For a new/important scene, `gm-lore.sh "<location>" [--important]` returns a grounded chapter brief from the source book.
 - **Between sessions:** at session end, optionally propose a few SMALL off-screen developments (grounded in plots/RAG) and persist them: `gm-session.sh world-tick '<json list>'` (applies all, warns if more than 3, `world-tick-rollback` undoes).
 
@@ -125,6 +126,8 @@ grounded source passages.
 | **What an NPC now remembers about the player** (a slight, a kindness, a debt, a lie they caught) | `gm-npc.sh update "<name>" "<event>"` — surfaces back under them in scene context next time they're present |
 | Character look (PC/NPC) | `gm-player.sh set-appearance` / `gm-npc.sh set-appearance` (the 11-field `visual_appearance` — author at creation, update when the look changes) |
 | Condition (PC) | `gm-condition.sh` |
+| World track (bidirectional meter) | `gm-track.sh adjust "<name>" --delta N` (`set --value N`; `add "<name>" <max>` to create) |
+| Faction standing / members / territory / relations | `gm-faction.sh standing "<name>" --delta N` (`member`, `claim`, `relation`, `contested`) |
 | PC death | `gm-player.sh kill` (status dead + log) — then run Death Protocol |
 | Play pack / one name from the book | `gm-playpack.sh set` / `stage` / `from-book "<name>"` |
 | Location moved | `gm-session.sh move` |

@@ -211,6 +211,8 @@ The harness is plumbing you can poke at: bash wrappers (`tools/`) → Python man
 | `gm-consequence.sh` | Schedule future events and triggers |
 | `gm-recall.sh` | Campaign memory — semantic recall, arc entries, memoir |
 | `gm-clock.sh` | Threat clocks — pressure that mounts as time passes |
+| `gm-track.sh` | World tracks — persisted meters that move both ways |
+| `gm-faction.sh` | Factions — standing, membership, territory, relations |
 | `gm-lore.sh` | Grounded chapter briefs from the source book |
 | `gm-note.sh` | Record world facts by category |
 | `gm-time.sh` | Advance in-game time |
