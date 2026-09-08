@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from lib.character_schema import is_open_schema, to_open_schema
+from lib.character_schema import is_open_schema, to_flat, to_open_schema
 from lib.player_manager import PlayerManager
 from lib.schemas import validate_character
 from lib.world_kit import WorldKit
@@ -92,3 +92,47 @@ def test_flat_sheet_validates_directly(dcc_world):
 def test_nameless_traveler_validates_without_race_or_class():
     ok, errs = validate_character({"name": "A nameless traveler", "level": 1})
     assert ok, errs
+
+
+def test_to_flat_does_not_invent_gold_when_the_open_shape_has_none():
+    """The third writer of a phantom `gold`.
+
+    save_character.py and identity_onboarding both learned to withhold gold on a
+    non-dnd5e kit, and this conversion put it straight back on the way to flat —
+    so an onboarded PC on a coinless world still persisted `gold: 0`. Absence is
+    safe: every reader uses char.get('gold', 0).
+    """
+    onboarded = {
+        "identity": {"name": "Rhiannon"},
+        "vitals": {"hp": {"current": 30, "max": 30}},
+        "attributes": {"strength": 4},
+        "progression": {"level": 0},
+        "inventory": {"items": []},
+    }
+    assert "gold" not in to_flat(onboarded)
+
+
+def test_to_flat_carries_an_authored_gold_across():
+    """Withholding must not become dropping — a 5e sheet keeps what it authored."""
+    authored = {
+        "identity": {"name": "Thorin"},
+        "vitals": {"hp": {"current": 10, "max": 10}},
+        "attributes": {"str": 15},
+        "progression": {"level": 1},
+        "inventory": {"gold": 25, "items": ["Longsword"]},
+    }
+    flat = to_flat(authored)
+    assert flat["gold"] == 25
+    assert flat["equipment"] == ["Longsword"]
+
+
+def test_to_flat_carries_an_authored_zero_gold_across():
+    """An explicit 0 is a value, not an absence — membership, not truthiness."""
+    authored = {
+        "identity": {"name": "Pauper"},
+        "vitals": {"hp": {"current": 10, "max": 10}},
+        "attributes": {"str": 10},
+        "progression": {"level": 1},
+        "inventory": {"gold": 0, "items": []},
+    }
+    assert to_flat(authored)["gold"] == 0

@@ -127,7 +127,13 @@ def to_flat(char: Dict[str, Any]) -> Dict[str, Any]:
     # inventory -> gold/equipment
     inv = char.get('inventory') or {}
     if isinstance(inv, dict):
-        flat['gold'] = inv.get('gold', 0)
+        # `gold` is carried across only when it is actually there. Inventing a
+        # zero here is how a coinless world still ended up with a gold field:
+        # save_character.py and identity_onboarding both learned to withhold it
+        # on a non-dnd5e kit, and this conversion put it back on the way to flat.
+        # Absence is safe — every reader uses char.get('gold', 0).
+        if 'gold' in inv:
+            flat['gold'] = inv['gold']
         flat['equipment'] = list(inv.get('items', []))
     # conditions
     flat['conditions'] = list(char.get('conditions') or [])
