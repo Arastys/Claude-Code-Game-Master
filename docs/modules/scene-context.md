@@ -10,6 +10,8 @@ sources:
   - { resource: /lib/entity_manager.py }
   - { resource: /tools/gm-context.sh }
   - { resource: /lib/play_pack.py }
+  - { resource: /lib/world_tracks.py }
+  - { resource: /lib/faction_manager.py }
 generated: { by: claude-opus-4-8[1m], at: 2026-08-16T00:00:00Z }
 verified: { by: claude-fable-5, at: 2026-08-14T12:19:52Z }
 ---
@@ -34,11 +36,11 @@ no history, threads, clocks, voice, or rules. Narrating a scene generally wants 
 `get_full_context` (`lib/session_manager.py:592`) assembles, in order: header (campaign, session #, location, time) ·
 **KIT** · **PRIMER** (play pack, when set) · play style (pacing, action menu, player-rolls dice, RAG inspiration) · **failure (one informing sentence)** · scene-image gate + chronicler · **narrative voice** · **world index** ·
 **previously on** + where-we-paused + open threads · **the world remembers** · story threads · **ready threads** (dormant seeded plots whose linked NPC/place is now present, or whose clock matured) · key facts · threat
-clocks · character · party members · **NPC voices** · pending consequences · **your
+clocks · **world tracks** · **factions** · character · party members · **NPC voices** · pending consequences · **your
 world's rules** · **signature systems** (executable kit primitives — `WorldKit.systems()`,
 rendered "ROLL these", distinct from the prose rules block).
 
-Eight of those blocks carry design decisions that are not obvious from reading them:
+Several of those blocks carry design decisions that are not obvious from reading them:
 
 - **KIT is ambient so skills do not re-derive it.** It sits right under the campaign
   header and names kit identity, resolution, progression, vitals, and skills, loaded
@@ -109,6 +111,18 @@ Eight of those blocks carry design decisions that are not obvious from reading t
   surface; a legacy campaign with none still gets `campaign_rules`. Those rules *are*
   the magic that makes each book distinct, and the GM is told to follow them exactly, so
   it must see all of them. See [game core and World Kit](game-core-and-world-kit.md).
+
+- **World tracks are not threat clocks, and both render only when declared.** A threat
+  clock only fills — `ThreatClockManager.advance` clamps the top and not the bottom, on
+  purpose. A world track moves BOTH ways and reports every threshold it crosses in either
+  direction, because the world *forgetting* something over generations is as much a beat
+  as the world learning it; its arithmetic delegates to `game_core.named_track`, and only
+  UPWARD crossings fire a consequence. FACTIONS carries the mutable half of the bible's
+  confirm-locked `factions` graph — standing (clamped `[-5, +5]` so it feeds
+  `reaction_roll` directly), members, territory and relations — and flags ground claimed
+  by more than one faction with a `⚔ CONTESTED` line. Both blocks are skipped entirely
+  when their JSON file is empty, so a campaign that declares neither sees neither header.
+  See [the living world](living-world.md).
 
 `--full` lifts every bound. `DM_DEBUG_CONTEXT=1` prints an approximate token count to
 stderr without changing the output; the ~2k-token target it reports against is guidance,
