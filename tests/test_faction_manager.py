@@ -22,6 +22,13 @@ def test_add_faction_defaults_to_neutral_standing(dcc_world):
     assert stored["note"] == "The families bound to the offering."
 
 
+def test_standing_range_matches_the_reaction_roll_contract():
+    """Pin the literals, not just the constants against themselves — changing
+    STANDING_MAX to 10 would keep `assert ... == STANDING_MAX` green while
+    silently breaking the game_core.reaction_roll contract the clamp exists for."""
+    assert (STANDING_MIN, STANDING_MAX) == (-5, 5)
+
+
 def test_standing_clamps_to_the_reaction_roll_range(dcc_world):
     m = FactionManager(dcc_world)
     m.add_faction(TITHE)
@@ -60,6 +67,9 @@ def test_operations_on_an_unknown_faction_return_none(dcc_world):
     assert m.set_standing(WOLVES, 1) is None
     assert m.adjust_standing(WOLVES, 1) is None
     assert m.add_member(WOLVES, "Nest") is None
+    assert m.remove_member(WOLVES, "Nest") is None
+    assert m.set_relation(WOLVES, TITHE, "hostile") is None
+    assert m.release(WOLVES, "Cwm Bedd") is None
 
 
 def test_remove_faction(dcc_world):
@@ -120,6 +130,14 @@ def test_holders_of_unclaimed_ground_is_empty(dcc_world):
     m.add_faction(TITHE)
     assert m.holders_of("Preseli") == []
     assert m.holders_of("") == []
+
+
+def test_holders_of_tolerates_a_non_string_truthy_location(dcc_world):
+    """Matches the str(value or "") hardening in _has_ci/_without_ci: a truthy
+    non-string (e.g. an int) must not crash on .strip() before str()-coercion."""
+    m = FactionManager(dcc_world)
+    m.add_faction(TITHE)
+    assert m.holders_of(123) == []
 
 
 def test_contested_lists_only_ground_two_factions_claim(dcc_world):

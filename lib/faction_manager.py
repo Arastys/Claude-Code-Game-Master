@@ -136,7 +136,7 @@ class FactionManager(EntityManager):
 
     def holders_of(self, location: str) -> List[str]:
         """Every faction claiming this place. More than one means contested."""
-        if not (location or "").strip():
+        if not str(location or "").strip():
             return []
         return [name for name, f in self._load().items()
                 if _has_ci(f.get("territory"), location)]

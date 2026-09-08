@@ -64,6 +64,17 @@ def test_custom_kit_keeps_fields_the_author_supplied(dcc_world):
     assert sheet["background"] == "last of her mother's line"
 
 
+def test_custom_kit_keeps_falsy_author_supplied_fields(dcc_world):
+    """The defect class here is membership-vs-truthiness: a "simplification" to
+    character_data.get(field) (falling back to the default on ANY falsy value,
+    not just a missing key) would pass the truthy-only test above while silently
+    reintroducing the bug for an explicitly-authored gold=0 or background=""."""
+    authored = dict(CUSTOM_PC, gold=0, background="")
+    sheet = _run_save(dcc_world, CUSTOM_RULESET, authored)
+    assert sheet["gold"] == 0
+    assert sheet["background"] == ""
+
+
 def test_dnd5e_sheet_is_unchanged(dcc_world):
     pc = {"name": "Thorin", "race": "Dwarf", "class": "Fighter", "level": 1,
           "stats": {"str": 15, "dex": 10, "con": 14, "int": 10, "wis": 10, "cha": 10}}
