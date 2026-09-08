@@ -20,6 +20,12 @@ find_python() {
 # Set up Python command
 PYTHON_CMD=$(find_python)
 
+# Windows consoles default to cp1252, which cannot encode the em-dashes, curly
+# quotes and non-ASCII names that campaign content is full of — `gm-session.sh
+# context` died with a UnicodeEncodeError before printing a single line. Forcing
+# UTF-8 on Python's stdio makes the tool layer encoding-safe on every platform.
+export PYTHONIOENCODING=utf-8
+
 # Get project root directory (parent of tools/)
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
