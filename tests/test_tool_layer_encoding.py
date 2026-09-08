@@ -6,6 +6,7 @@ before printing a single line.
 """
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -17,20 +18,27 @@ def test_common_sh_forces_utf8_stdio():
     assert "PYTHONIOENCODING=utf-8" in COMMON_SH.read_text(encoding="utf-8")
 
 
-def test_a_wrapper_can_print_non_ascii_under_a_legacy_codepage(isolated_world_state):
-    """Simulate the cp1252 console that broke this."""
+def test_a_wrapper_can_print_non_ascii_under_a_legacy_codepage(isolated_world_state, tmp_path):
+    """Simulate the cp1252 console that broke this.
+
+    The dice emoji 🎲 is outside cp1252, so without the fix the child raises
+    UnicodeEncodeError when it tries to print it.
+    """
+    # Set up a throwaway tools directory so the probe never touches the tracked tree.
+    (tmp_path / "tools").mkdir()
+    shutil.copy(REPO_ROOT / "tools" / "common.sh", tmp_path / "tools" / "common.sh")
+
+    # Simulate the cp1252 console in the parent environment.
     env = dict(os.environ, PYTHONIOENCODING="cp1252")
     script = (
         'source "$(dirname "$0")/common.sh"\n'
-        '$PYTHON_CMD -c "print(\'Käthe — Y Bedd\')"\n'
+        '$PYTHON_CMD -c "print(\'🎲 Käthe — Y Bedd\')"\n'
     )
-    runner = REPO_ROOT / "tools" / "_zz_encoding_probe.sh"
+    runner = tmp_path / "tools" / "encoding_probe.sh"
     runner.write_text(script, encoding="utf-8")
-    try:
-        proc = subprocess.run(["bash", str(runner)], capture_output=True,
-                              text=True, encoding="utf-8", env=env,
-                              cwd=str(REPO_ROOT))
-    finally:
-        runner.unlink()
+
+    proc = subprocess.run(["bash", str(runner)], capture_output=True,
+                          text=True, encoding="utf-8", env=env,
+                          cwd=str(REPO_ROOT))
     assert proc.returncode == 0, proc.stderr
-    assert "Käthe" in proc.stdout
+    assert "🎲" in proc.stdout
