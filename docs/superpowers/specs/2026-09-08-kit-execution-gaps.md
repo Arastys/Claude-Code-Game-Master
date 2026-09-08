@@ -32,7 +32,7 @@ campaign's central irreversible act has no way to be resolved.
 
 ## Gap 2 — resource-axis progression has no tool path
 
-`WorldKit.advance_progression()` (`world_kit.py:200`) and `level_for()` (`:203`)
+`WorldKit.advance_progression()` (`world_kit.py:200`) and `level()` (`:203`)
 exist and are correct. Nothing calls them.
 
 `PlayerManager.award_xp()` (`player_manager.py:238`) is hardcoded to the

@@ -241,6 +241,22 @@ is the cultural-fossil theme made mechanical.
 **Nerth** (might), **Buanedd** (swiftness), **Caledwch** (hardness). Enhanced senses
 and healing are baseline, not disciplines.
 
+**The core rule: spend N blood, add N — where N may not exceed your rating.** Rating
+is the cap, blood is the moment-to-moment constraint, generation is the ceiling on
+the cap. Nerth buys +N to Strength or melee damage; Buanedd +N to Dexterity,
+initiative or a reaction; Caledwch reduces incoming damage by N. At rating 5+, each
+opens onto things no human can do at all — narrate those as impossible, not as a
+bigger number.
+
+**Caledwch does nothing against fire, decapitation or heart destruction.** The three
+deaths bypass it at any rating, which is precisely why *Y Cof* is the deadliest
+thing in the world: knowledge routes around the one trait that would otherwise make
+an elder untouchable.
+
+**Newborns cannot modulate** — any activation spends the full rating whether the
+moment called for it or not. That is the mechanical form of being clumsy and loud,
+and unlearning it is the first thing practice buys.
+
 ## Gifts
 
 Roughly **one in ten**. **One per vampire.** Manifest at or near turning — instantly,
@@ -343,22 +359,38 @@ contradicts "age AND practice determine access", and its tiers exhausted themsel
 
 **Age and level are separate.** Age is a fact and a gate; level is earned. Age bands
 — **Newborn** (under 1) · **Young** (1–20) · **Settled** (20–100) · **Elder**
-(100–500) · **Ancient** (500+) — cap level at 1 / 3 / 6 / 10 / uncapped
-respectively. Generation caps what level can ever buy; past that ceiling further
-milestones grant nothing, and an immortal simply persists.
+(100–500) · **Ancient** (500+) — cap level at 2 / 5 / 10 / 20 / uncapped
+respectively. The gate only really bites in the first century; after that,
+time-skips carry the PC through the bands faster than milestones accumulate, so
+award pace is the real limiter.
 
-**A level buys one dot** — +1 to a physical attribute or a discipline, or one tier
-of gift progress (which still needs its decades of practice and cannot be bought
-with a milestone alone).
+**A level buys one dot** — +1 to a physical attribute, +1 to a discipline, or one
+tier of gift progress (which still needs its decades of practice and cannot be
+bought with a milestone alone).
+
+**What a dot is worth: attributes are the person, disciplines are the blood.**
+Physical attributes (Str/Dex/Sta) cap at **5 for everyone** — turning already
+granted the universal superhuman baseline, so even a 14th generation vastly
+outclasses any human. The three disciplines carry the generational axis:
+
+| Gen | 3rd | 4th | 5th | 6th | 7th | 8th | 9–10th | 11–13th | 14th+ |
+|---|---|---|---|---|---|---|---|---|---|
+| Nerth / Buanedd / Caledwch ceiling | 10 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 |
+
+The tail flattens — 3, 3, 2, 2, 2, 1 — which is exactly why the modern world loses
+the ability to perceive generation. Once every trait sits at its generational
+ceiling, further milestones grant nothing at all, and the immortal simply persists.
+A 5th generation maxing everything needs roughly **31 dots**.
 
 **Torpor years do not count.** Sleeping through a century keeps you safe and leaves
 you exactly where you were — someone who slept through the Roman occupation wakes
 intact, unadvanced, and four hundred years obsolete.
 
 **Awarding milestones:** `gm-player.sh award --tier legendary` grants one; `minor`
-and `major` grant only XP, which this kit does not use. Pace: one to three per era,
-roughly one every three to five sessions, fifteen to twenty-five across the whole
-campaign. Earned by surviving telegraphed lethal danger, a permanent change in
+and `major` grant only XP, which this kit does not use. Pace: two to four per era,
+roughly one every two to three sessions, **thirty to forty** across the whole
+campaign — enough that a specialised 5th generation can approach their ceiling by
+the modern era. Earned by surviving telegraphed lethal danger, a permanent change in
 standing, completing a long practice arc, outliving a world, or a choice that cost
 something irreversible. Not earned by winning an expected fight, time passing,
 feeding, a good line, or risk-free accumulation. The test: *would they still be

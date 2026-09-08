@@ -34,6 +34,7 @@
 - `tools/gm-faction.sh` — thin wrapper.
 - `tests/test_faction_manager.py` — standing clamping, membership, territory, contested ground.
 - `tests/test_world_state_context.py` — both sections render into `get_full_context`.
+- `tests/test_save_character_kit_fields.py` — Task 8: no invented D&D fields on non-5e sheets.
 
 **Modified:**
 - `lib/session_manager.py:847-856` — add WORLD TRACKS and FACTIONS sections after the THREAT CLOCKS block.
@@ -1429,3 +1430,187 @@ EOF
 - **Campaign creation is not blocked by this plan.** See the build-order table in
   `docs/superpowers/specs/2026-09-08-the-slow-heart-design.md` — every creation step
   writes a declaration, and these managers add live state on top of declarations.
+
+---
+
+### Task 8: Stop character creation stamping D&D-shaped fields onto non-dnd5e sheets
+
+> **Bundled, not thematic.** This task is unrelated to world tracks and factions —
+> it is appended here for execution efficiency rather than because it belongs. It
+> comes from upstream issue #9 (`save_character.py assumes D&D 5e`), most of which
+> is already fixed in this repo. Two residuals remain.
+
+**Files:**
+- Modify: `features/character-creation/save_character.py`
+- Test: `tests/test_save_character_kit_fields.py`
+
+**Interfaces:**
+- Consumes: the `is_dnd5e` flag already computed in `save_character_data` from `WorldKit.kit()`.
+- Produces: no new public interface — a behavioural change to the persisted sheet for non-dnd5e kits.
+
+**The defect.** `save_character_data` builds the character dict with a block of
+unconditional D&D 5e fields. Two of them actively lie on a non-5e sheet:
+
+- `"gold": character_data.get('gold', 0)` — The Slow Heart is set in 2000 BC, roughly
+  fourteen centuries before coinage reaches Britain. Upstream issue #9 names this
+  exact problem ("honour economy, barter, tripods and cattle").
+- `"xp": character_data.get('xp', {"current": 0, "next_level": 300})` — a 5e XP
+  threshold object stamped onto a `milestone` kit. **This directly contradicts a
+  documented invariant in the same codebase**: `PlayerManager._xp_view`
+  (`lib/player_manager.py:123-129`) states "a milestone or resource-axis sheet that
+  has never tracked XP must not grow a phantom xp object just because something read
+  it." The reader honours that rule; creation breaks it.
+
+Also stamped as empty strings: `background`, `alignment`, `bonds`, `flaws`,
+`ideals`, `traits`. These are 5e sheet fields — harmless noise rather than lies, but
+they should follow the same rule.
+
+**Safety, already verified:** every `gold` reader in `lib/player_manager.py` uses
+`char.get('gold', 0)` (lines 186, 203, 831, 959), and `_xp_view` uses
+`char.get('xp', 0)`. Omitting these keys crashes nothing.
+
+**The rule to implement:** on a **dnd5e** kit, behaviour is unchanged — all fields
+present with their current defaults. On any **other** kit, each of these keys is
+written only when the author actually supplied it. Never invent one.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/test_save_character_kit_fields.py`:
+
+```python
+"""Character creation must not stamp D&D-shaped fields onto a non-5e sheet.
+
+gold on a Bronze Age sheet is a lie (coinage postdates the setting by ~1400
+years), and a 5e xp object on a milestone kit contradicts _xp_view's own
+documented invariant that such a sheet "must not grow a phantom xp object".
+"""
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SAVE = REPO_ROOT / "features" / "character-creation" / "save_character.py"
+
+DND_RULESET = {"name": "D&D", "kit": "dnd5e",
+               "stat_schema": {"attributes": ["str"], "vitals": ["hp"]},
+               "progression": {"model": "xp-levels"}}
+CUSTOM_RULESET = {"name": "The Slow Heart", "kit": "custom",
+                  "stat_schema": {"attributes": ["strength"], "vitals": ["hp", "blood"]},
+                  "progression": {"model": "milestone"}}
+
+CUSTOM_PC = {"name": "Rhiannon", "level": 0, "stats": {"strength": 4},
+             "hp": {"current": 30, "max": 30}}
+
+
+def _campaign(world_dir):
+    base = Path(world_dir)
+    active = (base / "active-campaign.txt").read_text(encoding="utf-8").strip()
+    return base / "campaigns" / active
+
+
+def _run_save(world_dir, ruleset, character):
+    cdir = _campaign(world_dir)
+    (cdir / "ruleset.json").write_text(json.dumps(ruleset), encoding="utf-8")
+    proc = subprocess.run(
+        [sys.executable, str(SAVE), json.dumps(character)],
+        capture_output=True, text=True, encoding="utf-8",
+        env={**os.environ, "GM_WORLD_STATE_BASE": str(world_dir)},
+        cwd=str(REPO_ROOT))
+    assert proc.returncode == 0, proc.stderr
+    return json.loads((cdir / "character.json").read_text(encoding="utf-8"))
+
+
+def test_custom_kit_sheet_has_no_invented_gold(dcc_world):
+    assert "gold" not in _run_save(dcc_world, CUSTOM_RULESET, CUSTOM_PC)
+
+
+def test_custom_kit_sheet_has_no_invented_xp(dcc_world):
+    assert "xp" not in _run_save(dcc_world, CUSTOM_RULESET, CUSTOM_PC)
+
+
+def test_custom_kit_sheet_has_no_invented_5e_prose_fields(dcc_world):
+    sheet = _run_save(dcc_world, CUSTOM_RULESET, CUSTOM_PC)
+    for field in ("background", "alignment", "bonds", "flaws", "ideals", "traits"):
+        assert field not in sheet, f"{field} was invented on a non-5e sheet"
+
+
+def test_custom_kit_keeps_fields_the_author_supplied(dcc_world):
+    authored = dict(CUSTOM_PC, gold=12, background="last of her mother's line")
+    sheet = _run_save(dcc_world, CUSTOM_RULESET, authored)
+    assert sheet["gold"] == 12
+    assert sheet["background"] == "last of her mother's line"
+
+
+def test_dnd5e_sheet_is_unchanged(dcc_world):
+    pc = {"name": "Thorin", "race": "Dwarf", "class": "Fighter", "level": 1,
+          "stats": {"str": 15, "con": 14}}
+    sheet = _run_save(dcc_world, DND_RULESET, pc)
+    assert sheet["gold"] == 0
+    assert sheet["xp"] == {"current": 0, "next_level": 300}
+    assert sheet["background"] == ""
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `uv run --extra dev pytest tests/test_save_character_kit_fields.py -v`
+
+Expected: FAIL — the four `custom_kit` tests fail because the fields are present.
+`test_dnd5e_sheet_is_unchanged` should already PASS; if it does not, stop and
+report, because you have changed 5e behaviour.
+
+- [ ] **Step 3: Write the implementation**
+
+In `features/character-creation/save_character.py`, inside `save_character_data`,
+remove `gold`, `xp`, `background`, `alignment`, `bonds`, `flaws`, `ideals` and
+`traits` from the unconditional `character` dict literal, then add immediately
+after that literal:
+
+```python
+    # 5e sheet furniture. On a dnd5e kit these always exist with their defaults;
+    # on any other kit they appear only when the author actually supplied them —
+    # an invented `gold` is a lie on a barter world, and an invented `xp` object
+    # contradicts PlayerManager._xp_view, which refuses to let a milestone sheet
+    # "grow a phantom xp object just because something read it".
+    DND_SHEET_DEFAULTS = {
+        'gold': 0, 'xp': {"current": 0, "next_level": 300},
+        'background': '', 'alignment': '', 'bonds': '',
+        'flaws': '', 'ideals': '', 'traits': '',
+    }
+    for field, default in DND_SHEET_DEFAULTS.items():
+        if field in character_data:
+            character[field] = character_data[field]
+        elif is_dnd5e:
+            character[field] = default
+```
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `uv run --extra dev pytest tests/test_save_character_kit_fields.py -v`
+
+Expected: PASS — 5 passed
+
+Then confirm no regression in the sibling suites:
+
+Run: `uv run --extra dev pytest tests/test_character_schema.py tests/test_json_wrappers_onboard.py -v`
+
+Expected: no NEW failures. `tests/test_json_wrappers_onboard.py` carries 5 failures
+in this repo's pre-existing baseline — those are not yours and must not be fixed here.
+
+- [ ] **Step 5: Commit**
+
+Commit `features/character-creation/save_character.py` and
+`tests/test_save_character_kit_fields.py` with this message:
+
+```
+save-character: stop inventing D&D fields on non-dnd5e sheets
+
+gold on a Bronze Age barter world is a lie, and a 5e xp object on a milestone
+kit contradicts _xp_view's own documented invariant. Both now appear only when
+the author supplied them; dnd5e behaviour is unchanged.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01LjoPBmbPg1Hk3iGVJN9u9o
+```

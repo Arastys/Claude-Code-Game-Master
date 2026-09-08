@@ -442,7 +442,7 @@ EOF
 - Test: `tests/test_resource_axis_progression.py`
 
 **Interfaces:**
-- Consumes: `WorldKit.advance_progression(state, **kw)` (`world_kit.py:200`), `WorldKit.level_for(state)` (`:203`), `PlayerManager._load_character` / `_save_character`.
+- Consumes: `WorldKit.advance_progression(state, **kw)` (`world_kit.py:200`), `WorldKit.level(state)` (`:203`), `PlayerManager._load_character` / `_save_character`.
 - Produces: `PlayerManager.advance_resource(name: str | None, amount: int) -> dict` returning `{"success", "resource", "before", "after", "level_before", "level_after", "tier", "tier_changed"}`.
 
 `tier` is the name from `ruleset.json` `progression.tier_names[level]` when declared,
@@ -456,7 +456,7 @@ Create `tests/test_resource_axis_progression.py`:
 ```python
 """resource-axis campaigns must be able to advance.
 
-WorldKit.advance_progression and level_for were correct and unreachable — award_xp
+WorldKit.advance_progression and level were correct and unreachable — award_xp
 is hardcoded to the xp-levels threshold path, so a kit declaring
 {"model": "resource-axis", "resource": "years"} could not gain a single year.
 """
@@ -558,9 +558,9 @@ Add to `PlayerManager` in `lib/player_manager.py`, next to `award_xp`:
                     'error': f"kit progression '{kit.progression.name}' has no resource axis"}
 
         before = int(char.get(resource, 0))
-        level_before = kit.level_for(char)
+        level_before = kit.level(char)
         char[resource] = int(kit.advance_progression(char, amount=int(amount))[resource])
-        level_after = kit.level_for(char)
+        level_after = kit.level(char)
         char['level'] = level_after
         self._save_character(char.get('name', name), char)
 
@@ -615,7 +615,7 @@ git add lib/player_manager.py tests/test_resource_axis_progression.py
 git commit -m "$(cat <<'EOF'
 progression: give resource-axis kits a tool path to advance
 
-WorldKit.advance_progression/level_for were correct and unreachable; award_xp is
+WorldKit.advance_progression/level were correct and unreachable; award_xp is
 hardcoded to xp-levels. A years-based kit could not gain a single year.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
