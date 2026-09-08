@@ -3,7 +3,8 @@
 #
 #   gm-time.sh <time_of_day> <date> [--ticks N] [--duration "<text>"]
 # Time-clocks advance by elapsed magnitude: minutes/hours/same-day → 1 tick,
-# N days → N ticks, N weeks → 7*N ticks. Default (neither flag) is 1.
+# N days → N ticks, N weeks → 7*N ticks, N months → 30*N ticks, N years → 365*N
+# ticks (longest unit present in --duration wins). Default (neither flag) is 1.
 
 source "$(dirname "$0")/common.sh"
 
