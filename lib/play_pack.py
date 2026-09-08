@@ -130,11 +130,17 @@ def save_pack(campaign_dir, fields: Dict[str, Any]) -> Dict[str, Any]:
     pack = normalize_pack({**normalize_pack(overview.get("play_pack")), **fields})
     overview["play_pack"] = pack
     if pack["room"]:
+        # apply_stage keys locations.json and every present NPC's tags.locations by
+        # _short_name(pack["room"]), and npcs_present matches current_location by
+        # exact (case-insensitive) equality. Store that same short key here so the
+        # PC's position agrees with the staged cast from the very first beat — the
+        # authored prose stays intact in pack["room"] for render_primer to display.
+        room_key = _short_name(pack["room"])
         pos = overview.get("player_position") if isinstance(overview.get("player_position"), dict) else {}
-        pos["current_location"] = pack["room"]
+        pos["current_location"] = room_key
         overview["player_position"] = pos
         hook = overview.get("opening_hook") if isinstance(overview.get("opening_hook"), dict) else {}
-        hook["location"] = pack["room"]
+        hook["location"] = room_key
         hook["hook"] = pack["hook"] or hook.get("hook", "")
         overview["opening_hook"] = hook
         # The pack IS the matched opening — close the reseed latch so a later
