@@ -325,23 +325,45 @@ person to person.
 
 ## Mechanical summary
 
-Four dials, no overlap:
+Five dials, no overlap:
 
 | Dial | Job | How it moves |
 |---|---|---|
 | **Generation** | Sets the ceiling | Diablerie only, rarely |
-| **Age tier** | How much of the ceiling you reach | Waking years |
+| **Age** | Gates how high level may climb | Waking years |
+| **Level** | How much of the ceiling you actually reach | Milestones earned |
 | **Gift tier** | Your one metaphysical capability | Deliberate practice |
 | **Blood pool** | What you can spend right now | Feeding; everything costs it |
 
-**Progression model: `resource-axis`, resource = years.** The only model where "I
-spend forty years learning to hold this gift steady" is a mechanically real action.
-Tiers named as immortals would think of each other: **Newborn** (under a year),
-**Young**, **Settled**, **Elder**, **Ancient**.
+**Progression model: `milestone`.** *(Revised — an earlier draft used `resource-axis`
+on years. That was wrong twice over: it meant advancing by merely existing, which
+contradicts "age AND practice determine access", and its tiers exhausted themselves
+— at 1/20/100/500 years a PC hits the top tier around the Roman conquest, leaving
+2,400 years of campaign with no progression axis at all.)*
+
+**Age and level are separate.** Age is a fact and a gate; level is earned. Age bands
+— **Newborn** (under 1) · **Young** (1–20) · **Settled** (20–100) · **Elder**
+(100–500) · **Ancient** (500+) — cap level at 1 / 3 / 6 / 10 / uncapped
+respectively. Generation caps what level can ever buy; past that ceiling further
+milestones grant nothing, and an immortal simply persists.
+
+**A level buys one dot** — +1 to a physical attribute or a discipline, or one tier
+of gift progress (which still needs its decades of practice and cannot be bought
+with a milestone alone).
 
 **Torpor years do not count.** Sleeping through a century keeps you safe and leaves
 you exactly where you were — someone who slept through the Roman occupation wakes
 intact, unadvanced, and four hundred years obsolete.
+
+**Awarding milestones:** `gm-player.sh award --tier legendary` grants one; `minor`
+and `major` grant only XP, which this kit does not use. Pace: one to three per era,
+roughly one every three to five sessions, fifteen to twenty-five across the whole
+campaign. Earned by surviving telegraphed lethal danger, a permanent change in
+standing, completing a long practice arc, outliving a world, or a choice that cost
+something irreversible. Not earned by winning an expected fight, time passing,
+feeding, a good line, or risk-free accumulation. The test: *would they still be
+telling this story in four hundred years?* Full criteria in the campaign's
+`rules.md`.
 
 ### Signature systems (3)
 
