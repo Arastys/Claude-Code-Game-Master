@@ -1,7 +1,7 @@
 """resource-axis campaigns must be able to advance.
 
-WorldKit.advance_progression and level_for were correct and unreachable — award_xp
-is hardcoded to the xp-levels threshold path, so a kit declaring
+WorldKit.advance_progression and WorldKit.level were correct and unreachable —
+award_xp is hardcoded to the xp-levels threshold path, so a kit declaring
 {"model": "resource-axis", "resource": "years"} could not gain a single year.
 """
 
@@ -76,6 +76,58 @@ def test_fails_cleanly_when_there_is_no_character(years_world):
     assert PlayerManager(years_world).advance_resource(None, 1)["success"] is False
 
 
+def test_fails_cleanly_on_a_kit_with_no_resource_axis(dcc_world):
+    """A milestone/xp-levels kit — the path every shipped kit takes — must not
+    silently increment a field literally named `resource`
+    (ResourceAxisProgression defaults resource='resource')."""
+    cdir = Path(dcc_world) / "campaigns" / "dungeon-crawler-carl"
+    ruleset = json.loads((cdir / "ruleset.json").read_text(encoding="utf-8"))
+    ruleset["progression"] = {"model": "milestone"}
+    (cdir / "ruleset.json").write_text(json.dumps(ruleset, indent=2), encoding="utf-8")
+    before = json.loads((cdir / "character.json").read_text(encoding="utf-8"))
+
+    out = PlayerManager(dcc_world).advance_resource(before.get("name"), 10)
+
+    assert out["success"] is False
+    after = json.loads((cdir / "character.json").read_text(encoding="utf-8"))
+    assert "resource" not in after
+
+
+def test_persisted_level_never_drops_below_one(years_world):
+    """resource-axis level() is 0-based (0 below the first tier), but the rest
+    of the sheet (get_xp_status, etc.) defaults char.get('level', 1) and treats
+    0 as a false READY_TO_LEVEL_UP signal. The written sheet must stay >= 1
+    even while the raw, kit-computed level_after (returned to the caller) is 0."""
+    out = PlayerManager(years_world).advance_resource("Rhiannon", 0)
+    assert out["level_after"] == 0        # the progression model's own math, untouched
+
+    saved = json.loads(
+        (Path(years_world) / "campaigns" / "dungeon-crawler-carl" / "character.json")
+        .read_text(encoding="utf-8")
+    )
+    assert saved["level"] == 1
+
+
+def test_human_mode_prints_the_error_on_stderr(dcc_world):
+    """The sibling CLI this branch added (kit_systems.py) routes human-mode
+    errors through emit_error to stderr; advance_resource's failure used to
+    return an unprinted `error` string, exiting 1 with no message at all."""
+    cdir = Path(dcc_world) / "campaigns" / "dungeon-crawler-carl"
+    ruleset = json.loads((cdir / "ruleset.json").read_text(encoding="utf-8"))
+    ruleset["progression"] = {"model": "milestone"}
+    (cdir / "ruleset.json").write_text(json.dumps(ruleset, indent=2), encoding="utf-8")
+
+    r = subprocess.run(
+        ["uv", "run", "python", str(ROOT / "lib" / "player_manager.py"),
+         "advance", "--amount", "10"],
+        capture_output=True, text=True, cwd=str(ROOT),
+        env={**os.environ, "GM_WORLD_STATE_BASE": str(dcc_world)},
+    )
+    assert r.returncode == 1
+    assert "[ERROR]" in r.stderr
+    assert "resource axis" in r.stderr
+
+
 def _advance(world, *args):
     """Drive the real wrapper (not the manager directly) against a hermetic
     world-state tree. The wrapper is a literal `case "$ACTION"` dispatcher, not
@@ -118,6 +170,10 @@ def test_wrapper_advance_human_mode(years_world):
 
 def test_wrapper_advance_is_discoverable_in_usage(years_world):
     """Added to the `*)` usage block so the new verb is discoverable."""
+    r = _advance(years_world)  # no args -> argparse --amount required error, not usage
+    # advance with no args hits argparse's own "required" error, not the wrapper's
+    # `*)` banner — confirm the banner text itself (via a genuinely unknown action)
+    # still advertises the verb.
     r2 = subprocess.run(
         ["bash", str(ROOT / "tools" / "gm-player.sh"), "bogus-action"],
         capture_output=True, text=True,

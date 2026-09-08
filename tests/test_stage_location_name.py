@@ -23,6 +23,8 @@ PROSE = ("Y Bedd — the offering stone on the shoulder above Cwm Bedd, at dusk.
     ("Barovia, the village", "Barovia"),
     ("Deck 12.", "Deck 12"),
     ("   ", "the stage"),
+    ("St. Cuthbert's Shrine", "St. Cuthbert's Shrine"),
+    ("Mt. Doom, the crack", "Mt. Doom"),
 ])
 def test_short_name_derivation(room, expected):
     assert _short_name(room) == expected

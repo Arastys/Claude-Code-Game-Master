@@ -1064,7 +1064,7 @@ class SessionManager(EntityManager):
             lines.append("")
             lines.append("--- YOUR WORLD'S SIGNATURE SYSTEMS (executable — ROLL these, "
                          "do not just narrate them) ---")
-            lines.append("Resolve with lib/game_core primitives "
+            lines.append('Resolve with `bash tools/gm-system.sh roll "<name>" [args]` '
                          "(named_track / price_roll / reaction_roll / guarded_payoff).")
             for s in sys_list:
                 lines.append(f"- {s['name']} ({s['primitive']}): {self._system_summary(s)}")

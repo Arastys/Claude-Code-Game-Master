@@ -32,7 +32,10 @@ PACK_KEYS = (
 )
 
 
-def _short_name(room: str, limit: int = 48) -> str:
+_SHORT_NAME_DELIM_RE = re.compile(r"(?P<dash>\s+[—–-]\s+)|(?P<punct>[,:;])|(?P<period>\.)")
+
+
+def _short_name(room: Optional[str], limit: int = 48) -> str:
     """A matchable location key from a `room` that may have been written as prose.
 
     play_pack.room is specified as "one street / room / deck", but it invites
@@ -41,10 +44,24 @@ def _short_name(room: str, limit: int = 48) -> str:
     paragraph made the whole staged cast unreachable. Splitting on the first
     dash/comma/sentence break recovers the name a person would actually type,
     and a short well-formed room passes through untouched.
+
+    The `.` delimiter is gated: a period only ends the name when the text before
+    it is plausibly a full name/room (at least two words) — "Deck 12." splits to
+    "Deck 12", but "St. Cuthbert's Shrine" or "Mt. Doom, the crack" must not stop
+    at the abbreviated title ("St", "Mt"). A period that fails the gate is
+    skipped and scanning continues for the next delimiter (so the comma in
+    "Mt. Doom, the crack" still splits normally).
     """
-    head = re.split(r"\s+[—–-]\s+|[.,:;]", (room or "").strip(), maxsplit=1)[0].strip()
+    text = (room or "").strip()
+    head = text
+    for m in _SHORT_NAME_DELIM_RE.finditer(text):
+        candidate = text[:m.start()].strip()
+        if m.lastgroup == "period" and len(candidate.split()) < 2:
+            continue
+        head = candidate
+        break
     if not head:
-        head = (room or "").strip()[:limit].rstrip()
+        head = text[:limit].rstrip()
     return head[:limit].rstrip() or "the stage"
 
 

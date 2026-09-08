@@ -40,7 +40,11 @@ XP-threshold path: it reads `_xp_view`, compares against `_xp_thresholds`, and w
 `level`. A campaign declaring `{"model": "resource-axis", "resource": "years"}` has
 no way to add to that resource, and therefore no way to change tier.
 
-the-slow-heart advances on waking years. As shipped, it cannot advance at all.
+the-slow-heart advanced on waking years when this gap was found; it has since
+moved to a `milestone` progression, so that campaign no longer illustrates the
+gap. The gap itself is still real — the DCC fixture (`tests/fixtures/world-state`)
+declares a genuine resource-axis kit (`resource: "viewers"`), and as shipped it
+had no way to advance at all.
 
 ## Bug 3 — Tool layer dies on non-ASCII output under Windows
 

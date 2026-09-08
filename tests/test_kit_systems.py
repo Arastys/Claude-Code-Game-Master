@@ -21,7 +21,7 @@ SYSTEMS = [
     {"primitive": "named_track", "name": "Y Syched",
      "config": {"max": 10, "thresholds": [{"at": 3, "consequence": "the Thirst rises"}]}},
     {"primitive": "price_roll", "name": "Diablerie",
-     "config": {"dice": "1d20", "modifier": 0,
+     "config": {"dice": "1d20", "modifier": 3,
                 "ladder": [{"min_roll": 16, "cost": "clean"},
                            {"min_roll": 10, "cost": "haunted"},
                            {"min_roll": -99, "cost": "overwritten"}]}},
@@ -77,11 +77,14 @@ def test_price_roll_uses_severity_and_reads_the_ladder(kit_world):
 
 
 def test_price_roll_modifier_overrides_config(kit_world):
-    """Practice is a per-attempt bonus, not a property of the system."""
+    """A per-attempt --modifier REPLACES the system's own config modifier — it
+    does not add to it. The fixture's base modifier is 3 (non-zero) so
+    "override" and "add" semantics produce different totals and this test can
+    actually tell them apart: override(8) - base(3) = +5, not +8."""
     plain = KitSystems(kit_world).roll("Diablerie", severity=10, rng=random.Random(7))
     skilled = KitSystems(kit_world).roll("Diablerie", severity=10, modifier=8,
                                          rng=random.Random(7))
-    assert skilled["total"] == plain["total"] + 8
+    assert skilled["total"] == plain["total"] + 5
 
 
 def test_price_roll_requires_severity(kit_world):

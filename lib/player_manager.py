@@ -289,7 +289,7 @@ class PlayerManager(EntityManager):
 
         return result
 
-    def advance_resource(self, name: str, amount: int) -> Dict[str, Any]:
+    def advance_resource(self, name: Optional[str], amount: int) -> Dict[str, Any]:
         """Advance a resource-axis progression (years, viewers, spice...).
 
         award_xp walks the xp-levels threshold table and cannot serve a kit whose
@@ -312,7 +312,11 @@ class PlayerManager(EntityManager):
         level_before = kit.level(char)
         char[resource] = int(kit.advance_progression(char, amount=int(amount))[resource])
         level_after = kit.level(char)
-        char['level'] = level_after
+        # resource-axis level() is 0-based (0 below the first tier), but the rest of
+        # the sheet (get_xp_status, etc.) defaults char.get('level', 1) and treats a
+        # persisted 0 as a false READY_TO_LEVEL_UP signal. Clamp what is WRITTEN;
+        # the returned level_before/level_after stay the progression model's own math.
+        char['level'] = max(1, level_after)
         self._save_character(char.get('name', name), char)
 
         tier_names = ((kit.ruleset.get('progression') or {}).get('tier_names')) or []
@@ -1297,7 +1301,7 @@ def main():
     elif args.action == 'advance':
         result = manager.advance_resource(args.name, args.amount)
         if not result.get('success'):
-            sys.exit(1)
+            sys.exit(emit_error(result.get('error', 'advance failed'), json_mode=False))
         print(f"{result['resource']}: {result['before']} -> {result['after']}")
         if result['tier_changed']:
             print(f"TIER CHANGE -> {result['tier'] or result['level_after']}")
