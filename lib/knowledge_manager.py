@@ -45,6 +45,20 @@ def _one_of(value: Any, allowed: tuple, field: str) -> str:
     return normalized
 
 
+def _id_order(pid: str):
+    """Sort key putting P9 before P10.
+
+    Ids are `P` plus a counter, so comparing them as raw strings orders P10 ahead
+    of P2. `touched` ties are the common case — every proposition written in one
+    session shares a session number — so at the brief's cap a string sort silently
+    dropped a lower-numbered proposition in favour of a higher one.
+    """
+    digits = str(pid)[1:]
+    if str(pid)[:1] == "P" and digits.isdigit():
+        return (0, int(digits))
+    return (1, str(pid))
+
+
 class KnowledgeManager(EntityManager):
     """Propositions, and who holds a stance on them."""
 
@@ -98,7 +112,8 @@ class KnowledgeManager(EntityManager):
             about = _norm(entry.get("about"))
             if (holders & present_norm) or (about and about in present_norm):
                 shown.append((pid, entry))
-        shown.sort(key=lambda pe: (-int(pe[1].get("touched", 0) or 0), pe[0]))
+        shown.sort(key=lambda pe: (-int(pe[1].get("touched", 0) or 0),
+                                   _id_order(pe[0])))
         return shown[:limit], dormant
 
     @staticmethod
@@ -339,7 +354,8 @@ def main():
         out = props
 
     if out is None:
-        sys.exit(emit_error(f"no such proposition: {args.pid}", json_mode))
+        sys.exit(emit_error(
+            f"no such proposition: {getattr(args, 'pid', args.action)}", json_mode))
 
     if json_mode:
         emit(out, json_mode=True)

@@ -249,9 +249,17 @@ def test_cli_rejects_an_unknown_proposition_with_a_nonzero_exit(dcc_world):
 
 
 def test_cli_rejects_an_invalid_stance_at_the_argument_parser(dcc_world):
+    """Must prove ARGPARSE rejected it, not merely that something failed.
+
+    `returncode != 0` cannot tell argparse's clean exit(2) from a regression that
+    dropped choices=STANCES, let the value reach set_stance, and raised ValueError
+    — which also exits nonzero.
+    """
     KnowledgeManager(dcc_world).add_proposition(AGELESS)
     proc = _run_cli(dcc_world, "stance", "P1", "Mair", "certain", "--json")
-    assert proc.returncode != 0
+    assert proc.returncode == 2
+    assert "invalid choice" in proc.stderr
+    assert "Traceback" not in proc.stderr
 
 
 def test_cli_who_knows_returns_matches(dcc_world):
@@ -280,6 +288,17 @@ def test_cli_list_filters_by_status(dcc_world):
     assert list(json.loads(_run_cli(dcc_world, "list", "--active", "--json").stdout)["data"]) == ["P1"]
     assert list(json.loads(_run_cli(dcc_world, "list", "--dormant", "--json").stdout)["data"]) == ["P2"]
     assert sorted(json.loads(_run_cli(dcc_world, "list", "--json").stdout)["data"]) == ["P1", "P2"]
+
+
+def test_cli_list_with_both_status_flags_prefers_active(dcc_world):
+    """Sane precedence, pinned: --active wins rather than returning nothing."""
+    m = KnowledgeManager(dcc_world)
+    m.add_proposition(DROWNED)
+    m.add_proposition(AGELESS)
+    m.set_status("P2", "dormant")
+    proc = _run_cli(dcc_world, "list", "--active", "--dormant", "--json")
+    assert proc.returncode == 0, proc.stderr
+    assert list(json.loads(proc.stdout)["data"]) == ["P1"]
 
 
 def test_cli_forget_returns_the_knower_to_unaware(dcc_world):

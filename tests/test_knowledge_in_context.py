@@ -223,3 +223,18 @@ def test_the_block_sits_before_pending_consequences(tmp_path):
     m.set_stance("P1", "Mair", "knows")
     ctx = SessionManager(world).get_full_context()
     assert ctx.index("WHO KNOWS WHAT") < ctx.index("PENDING CONSEQUENCES")
+
+
+def test_ties_on_touched_order_numerically_not_lexicographically(dcc_world):
+    """P9 must sort before P10.
+
+    Every proposition written in one session shares a `touched` value, so ties are
+    the normal case rather than an edge case. A raw string sort renders
+    P10 P11 P6 P7 P8 and silently drops P9 at the five-proposition cap.
+    """
+    props = {f"P{i}": {"statement": f"thing {i}", "truth": "true",
+                       "status": "active", "touched": 3,
+                       "stances": {"Mair": {"stance": "knows", "since": 3}}}
+             for i in range(6, 12)}
+    shown, _ = KnowledgeManager.relevant(props, ["Mair"])
+    assert [pid for pid, _ in shown] == ["P6", "P7", "P8", "P9", "P10"]
