@@ -13,6 +13,8 @@ sources:
   - { resource: /lib/world_bible.py }
   - { resource: /lib/session_manager.py }
   - { resource: /lib/play_pack.py }
+  - { resource: /lib/world_tracks.py }
+  - { resource: /lib/faction_manager.py }
 generated: { by: claude-opus-4-8[1m], at: 2026-08-15T16:22:00Z }
 verified: { by: claude-fable-5, at: 2026-08-13T14:27:33Z }
 ---
@@ -620,6 +622,35 @@ signature_systems. The bible auto-generates the World Kit ruleset + campaign_rul
 A `confirmed: false` flag on a freshly auto-drafted bible holds the world for human review;
 **an absent flag counts as confirmed**, so hand-authored and legacy bibles are playable
 immediately. See [the World Bible](modules/world-bible.md).
+
+---
+
+## world-tracks.json
+
+```json
+{
+  "Y Cof": {
+    "current": 2,
+    "max": 6,
+    "thresholds": [{"at": 3, "consequence": "A rumour is circulating."}],
+    "note": "What the world remembers about killing the Old Dead."
+  }
+}
+```
+
+## factions.json
+
+```json
+{
+  "The Valley Tithe": {
+    "standing": 1,
+    "members": ["Nest"],
+    "territory": ["Cwm Bedd"],
+    "relations": {"Plant y Lleuad": "hostile"},
+    "note": "The families bound to the offering."
+  }
+}
+```
 
 ---
 

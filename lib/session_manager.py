@@ -855,6 +855,24 @@ class SessionManager(EntityManager):
                 flag = "  ⚠ FULL — a beat is due" if cur >= mx else ""
                 lines.append(f"{clock_name}: [{bar}] {cur}/{mx}{flag}")
 
+        # --- World Tracks (bidirectional world-level meters; only when declared) ---
+        tracks = self.json_ops.load_json("world-tracks.json") or {}
+        if tracks:
+            from world_tracks import WorldTrackManager
+            lines.append("")
+            lines.append("--- WORLD TRACKS ---")
+            lines.append(WorldTrackManager.render(tracks))
+
+        # --- Factions (standing, territory, relations; only when declared) ---
+        factions = self.json_ops.load_json("factions.json") or {}
+        if factions:
+            from faction_manager import FactionManager
+            lines.append("")
+            lines.append("--- FACTIONS ---")
+            lines.append(FactionManager.render(factions))
+            for place, claimants in FactionManager(self._wsd).contested().items():
+                lines.append(f"⚔ CONTESTED: {place} — {', '.join(claimants)}")
+
         # --- Character ---
         lines.append("")
         lines.append("--- CHARACTER ---")

@@ -10,10 +10,14 @@ sources:
   - { resource: /lib/time_manager.py }
   - { resource: /lib/plot_manager.py }
   - { resource: /lib/session_manager.py }
+  - { resource: /lib/world_tracks.py }
+  - { resource: /lib/faction_manager.py }
   - { resource: /tools/gm-time.sh }
   - { resource: /tools/gm-session.sh }
   - { resource: /tools/gm-clock.sh }
   - { resource: /tools/gm-plot.sh }
+  - { resource: /tools/gm-track.sh }
+  - { resource: /tools/gm-faction.sh }
   - { resource: /.claude/agents/plot-weaver.md }
 generated: { by: claude-opus-4-8[1m], at: 2026-08-16T00:00:00Z }
 verified: { by: cursor-grok-4.6, at: 2026-08-14T19:13:47Z }
@@ -143,6 +147,33 @@ existing entities/edges/clocks (via the WORLD INDEX), and persists ONE dormant t
 `add` + a `--linked-plot` clock + an `on_npc` surfacing consequence — then returns one line.
 It is the story analog of the background scene-illustrator, and it fits "plan as you go,
 never pre-build": one small dormant thread, not a gazetteer.
+
+## World tracks
+
+`world-tracks.json`, via `lib/world_tracks.py` / `bash tools/gm-track.sh`.
+
+A threat clock only fills — `advance()` clamps the top and not the bottom, on
+purpose. A world track moves both ways and reports every threshold it crosses in
+either direction, because the world *forgetting* something over generations is as
+much a beat as the world learning it. All arithmetic delegates to
+`game_core.named_track`, so a stored track behaves exactly like the kit primitive a
+ruleset declares.
+
+Thresholds fire into the consequence engine on **upward** crossings only. Climbing
+is the direction that arrives as an event; decay is a slow condition, and firing on
+the way down would put an incoherent beat in front of the GM.
+
+## Factions
+
+`factions.json`, via `lib/faction_manager.py` / `bash tools/gm-faction.sh`.
+
+`world-bible.json` carries a `factions` graph, but the bible is a confirm-locked
+reference with no write path: it says who exists, not who currently holds what. This
+owns the mutable half — `standing` (clamped `[-5, +5]`, consumable directly as
+`game_core.reaction_roll`'s `track_value`), `members`, `territory`, and `relations`.
+
+`holders_of(location)` and `contested()` are what make territory more than a list:
+ground claimed by two factions is flagged in scene context.
 
 ## Related
 
