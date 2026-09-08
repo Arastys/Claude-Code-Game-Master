@@ -40,13 +40,17 @@ ARCHIVE_BASE="$WORLD_STATE_BASE/archive"
 #                  ruleset.json via bible_to_campaign_rules)
 #   KIT    (kept): ruleset.json, rules.md, chronicler.json
 #   STORY (cleared): everything below — blanked when a manager expects the file
-#                    to exist, deleted when it is created lazily.
+#                    to exist, deleted when it is created lazily. world-tracks.json
+#                    and factions.json are cleared too: a roster naming NPCs and
+#                    locations that reset just deleted is worse than an empty one.
 STORY_FILES=(
     plots.json
     items.json
     campaign-memory.json
     combat_state.json
     threat-clocks.json
+    world-tracks.json
+    factions.json
     world-tick-log.json
     loremaster-cache.json
 )

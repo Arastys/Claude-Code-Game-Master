@@ -49,6 +49,8 @@ is named in `world-state/active-campaign.txt`.
 ├── rules.md                 # Optional long-form rules prose (ruleset.rules_doc)
 ├── session-log.md           # Session history — the canonical ledger
 ├── threat-clocks.json       # Named pressure clocks (optional)
+├── world-tracks.json        # Bidirectional world-level meters (optional)
+├── factions.json            # Faction standing, members, territory, relations (optional)
 ├── campaign-memory.json     # Recall index, rebuilt on save
 ├── chronicler.json          # Locked art style + in-world artist
 ├── world-tick-log.json      # Between-session tick provenance
@@ -531,6 +533,8 @@ items otherwise stay mixed in — do not treat a legacy save as a whole-world re
     "ruleset.json": {},
     "world-bible.json": {},
     "threat-clocks.json": {},
+    "world-tracks.json": {},
+    "factions.json": {},
     "campaign-memory.json": {},
     "chronicler.json": {},
     "world-tick-log.json": {},

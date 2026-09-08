@@ -51,6 +51,8 @@ class SessionManager(EntityManager):
         "ruleset.json",
         "world-bible.json",
         "threat-clocks.json",
+        "world-tracks.json",
+        "factions.json",
         "campaign-memory.json",
         "chronicler.json",
         "world-tick-log.json",
