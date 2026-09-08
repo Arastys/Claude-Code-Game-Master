@@ -34,6 +34,33 @@ class WorldTrackManager(EntityManager):
     def _load(self) -> Dict[str, Any]:
         return self.json_ops.load_json(self.tracks_file) or {}
 
+    def _fire_crossings(self, name: str, result: Dict[str, Any]) -> List[str]:
+        """Write consequences for thresholds crossed while CLIMBING.
+
+        Climbing is the dangerous direction — the world learning something is an
+        event that arrives, while the world forgetting is a slow condition. Firing
+        both ways would put an incoherent beat in front of the GM every time a
+        track decayed. Mirrors ThreatClockManager._fire_if_filled, including the
+        stdout redirect: add_consequence announces itself, and this runs inside
+        adjust(), whose --json output must stay parseable.
+        """
+        if result["after"] <= result["before"]:
+            return []
+        import contextlib
+        from consequence_manager import ConsequenceManager
+
+        fired = []
+        with contextlib.redirect_stdout(sys.stderr):
+            cm = ConsequenceManager(self._wsd)
+            for threshold in result.get("crossed") or []:
+                text = threshold.get("consequence")
+                if not text:
+                    continue
+                fired.append(cm.add_consequence(
+                    f"[Track — {name}] {text}",
+                    trigger=f"the {name} track reached {threshold.get('at')}"))
+        return fired
+
     def add_track(self, name: str, max_value: int, thresholds: List[Dict] = None,
                   note: str = None, current: int = 0) -> Dict[str, Any]:
         data = self._load()
@@ -65,7 +92,7 @@ class WorldTrackManager(EntityManager):
         )
         track["current"] = result["after"]
         self.json_ops.save_json(self.tracks_file, data)
-        return {"name": name, **result}
+        return {"name": name, **result, "fired": self._fire_crossings(name, result)}
 
     def set_value(self, name: str, value: int) -> Optional[Dict[str, Any]]:
         """Set an absolute value, still reporting the thresholds it passes through."""

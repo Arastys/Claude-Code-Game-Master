@@ -95,3 +95,61 @@ def test_add_track_clamps_negative_initial_value(dcc_world):
     m = WorldTrackManager(dcc_world)
     m.add_track("Y Cof", 6, current=-5)
     assert m.get_tracks()["Y Cof"]["current"] == 0
+
+
+from lib.consequence_manager import ConsequenceManager
+
+RUMOUR = "A rumour with the right shape is circulating."
+
+
+def _active(world):
+    data = ConsequenceManager(world).json_ops.load_json("consequences.json") or {}
+    return [c.get("consequence", "") for c in data.get("active", [])]
+
+
+def _fired(world, needle=RUMOUR):
+    return [c for c in _active(world) if needle in c]
+
+
+def test_climbing_past_a_threshold_fires_its_consequence(dcc_world):
+    m = WorldTrackManager(dcc_world)
+    m.add_track("Y Cof", 6, thresholds=THRESHOLDS)
+    result = m.adjust("Y Cof", 3)
+    fired = _fired(dcc_world)
+    assert len(fired) == 1
+    assert "[Track — Y Cof]" in fired[0]
+    assert len(result["fired"]) == 1
+
+
+def test_falling_past_a_threshold_fires_nothing(dcc_world):
+    m = WorldTrackManager(dcc_world)
+    m.add_track("Y Cof", 6, thresholds=THRESHOLDS, current=6)
+    result = m.adjust("Y Cof", -4)
+    assert _fired(dcc_world) == []
+    assert result["fired"] == []
+
+
+def test_climbing_two_thresholds_at_once_fires_both(dcc_world):
+    m = WorldTrackManager(dcc_world)
+    m.add_track("Y Cof", 6, thresholds=THRESHOLDS)
+    result = m.adjust("Y Cof", 5)
+    assert len(result["fired"]) == 2
+
+
+def test_threshold_without_a_consequence_fires_nothing(dcc_world):
+    m = WorldTrackManager(dcc_world)
+    m.add_track("Quiet", 3, thresholds=[{"at": 1}])
+    before = len(_active(dcc_world))
+    result = m.adjust("Quiet", 1)
+    assert result["fired"] == []
+    assert len(_active(dcc_world)) == before
+
+
+def test_firing_keeps_stdout_parseable(dcc_world, capsys):
+    """adjust() is behind a --json CLI path; a fire must not leak onto stdout."""
+    m = WorldTrackManager(dcc_world)
+    m.add_track("Y Cof", 6, thresholds=THRESHOLDS)
+    capsys.readouterr()
+    m.adjust("Y Cof", 3)
+    out = capsys.readouterr()
+    assert out.out.strip() == "", f"fire leaked onto stdout: {out.out!r}"
