@@ -72,7 +72,7 @@ def test_named_track_requires_current_and_delta(kit_world):
 def test_price_roll_uses_severity_and_reads_the_ladder(kit_world):
     out = KitSystems(kit_world).roll("Diablerie", severity=0, rng=random.Random(1))
     assert out["primitive"] == "price_roll"
-    assert out["cost"] in {"clean", "haunted", "overwritten"}
+    assert out["cost"] == "overwritten"  # Random(1) rolls 5 on 1d20; total 5 < 10
     assert out["severity"] == 0
 
 
@@ -93,12 +93,12 @@ def test_reaction_roll_uses_track_value(kit_world):
     out = KitSystems(kit_world).roll("The Aberth", track_value=5, rng=random.Random(3))
     assert out["primitive"] == "reaction_roll"
     assert out["track_value"] == 5
-    assert out["reaction"] in {"warm", "cold"}
+    assert out["reaction"] == "warm"  # Random(3) rolls 7 on 2d6; total 7+5=12 >= 10
 
 
 def test_guarded_payoff_needs_no_arguments(kit_world):
     out = KitSystems(kit_world).roll("Opening a barrow", rng=random.Random(5))
-    assert out["outcome"] in {"clean", "guardian_wakes", "curse_attaches"}
+    assert out["outcome"] == "clean"  # Random(5) rolls 20 on 1d20; 20 >= clean_at 15
 
 
 def test_cli_roll_emits_a_json_envelope(kit_world):

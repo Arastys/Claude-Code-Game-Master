@@ -99,8 +99,10 @@ def main():
             out = ks.roll(args.name, current=args.current, delta=args.delta,
                           severity=args.severity, track_value=args.track_value,
                           modifier=args.modifier)
-        except (KeyError, ValueError) as exc:
-            sys.exit(emit_error(str(exc).strip("'"), json_mode))
+        except KeyError as exc:
+            sys.exit(emit_error(exc.args[0], json_mode))
+        except ValueError as exc:
+            sys.exit(emit_error(str(exc), json_mode))
 
     if json_mode:
         emit(out, json_mode=True)
