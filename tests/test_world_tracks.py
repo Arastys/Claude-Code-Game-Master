@@ -81,3 +81,17 @@ def test_render_shows_a_bar_and_value(dcc_world):
     out = WorldTrackManager.render(m.get_tracks())
     assert "Y Cof" in out
     assert "2/6" in out
+
+
+def test_add_track_clamps_high_initial_value(dcc_world):
+    """Creation-time clamping: initial value above max is clamped to max."""
+    m = WorldTrackManager(dcc_world)
+    m.add_track("Y Cof", 6, current=99)
+    assert m.get_tracks()["Y Cof"]["current"] == 6
+
+
+def test_add_track_clamps_negative_initial_value(dcc_world):
+    """Creation-time clamping: negative initial value is clamped to 0."""
+    m = WorldTrackManager(dcc_world)
+    m.add_track("Y Cof", 6, current=-5)
+    assert m.get_tracks()["Y Cof"]["current"] == 0

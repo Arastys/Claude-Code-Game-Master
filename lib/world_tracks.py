@@ -37,8 +37,11 @@ class WorldTrackManager(EntityManager):
     def add_track(self, name: str, max_value: int, thresholds: List[Dict] = None,
                   note: str = None, current: int = 0) -> Dict[str, Any]:
         data = self._load()
+        # Delegate clamping to named_track so it owns the [0, max] arithmetic.
+        clamped_current = named_track(0, int(current),
+                                      {"max": int(max_value), "thresholds": []})["after"]
         entry = {
-            "current": max(0, min(int(max_value), int(current))),
+            "current": clamped_current,
             "max": int(max_value),
             "thresholds": list(thresholds or []),
         }
