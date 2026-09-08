@@ -113,3 +113,43 @@ class FactionManager(EntityManager):
 
     def get_factions(self) -> Dict[str, Any]:
         return self._load()
+
+    def claim(self, name: str, location: str) -> Optional[Dict[str, Any]]:
+        data = self._load()
+        faction = data.get(name)
+        if faction is None:
+            return None
+        territory = faction.setdefault("territory", [])
+        if not _has_ci(territory, location):
+            territory.append(location)
+            self._save(data)
+        return faction
+
+    def release(self, name: str, location: str) -> Optional[Dict[str, Any]]:
+        data = self._load()
+        faction = data.get(name)
+        if faction is None:
+            return None
+        faction["territory"] = _without_ci(faction.get("territory"), location)
+        self._save(data)
+        return faction
+
+    def holders_of(self, location: str) -> List[str]:
+        """Every faction claiming this place. More than one means contested."""
+        if not (location or "").strip():
+            return []
+        return [name for name, f in self._load().items()
+                if _has_ci(f.get("territory"), location)]
+
+    def contested(self) -> Dict[str, List[str]]:
+        """Ground more than one faction claims: location (as stored) -> claimants."""
+        claimants: Dict[str, List[str]] = {}
+        display: Dict[str, str] = {}
+        for name, faction in self._load().items():
+            for place in faction.get("territory") or []:
+                key = str(place).strip().lower()
+                if not key:
+                    continue
+                display.setdefault(key, str(place))
+                claimants.setdefault(key, []).append(name)
+        return {display[k]: v for k, v in claimants.items() if len(v) > 1}

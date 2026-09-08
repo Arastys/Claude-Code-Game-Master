@@ -85,3 +85,55 @@ def test_add_faction_resets_an_existing_faction(dcc_world):
     m.add_faction(TITHE)
     assert m.get_factions()[TITHE]["members"] == []
     assert m.get_factions()[TITHE]["standing"] == 0
+
+
+CWM = "Cwm Bedd"
+
+
+def test_claim_is_idempotent_and_case_insensitive(dcc_world):
+    m = FactionManager(dcc_world)
+    m.add_faction(TITHE)
+    m.claim(TITHE, CWM)
+    m.claim(TITHE, "cwm bedd")
+    assert m.get_factions()[TITHE]["territory"] == [CWM]
+
+
+def test_release_removes_a_claim(dcc_world):
+    m = FactionManager(dcc_world)
+    m.add_faction(TITHE)
+    m.claim(TITHE, CWM)
+    m.release(TITHE, "CWM BEDD")
+    assert m.get_factions()[TITHE]["territory"] == []
+
+
+def test_holders_of_finds_every_claimant(dcc_world):
+    m = FactionManager(dcc_world)
+    m.add_faction(TITHE)
+    m.add_faction(WOLVES)
+    m.claim(TITHE, CWM)
+    m.claim(WOLVES, "cwm bedd")
+    assert sorted(m.holders_of(CWM)) == sorted([TITHE, WOLVES])
+
+
+def test_holders_of_unclaimed_ground_is_empty(dcc_world):
+    m = FactionManager(dcc_world)
+    m.add_faction(TITHE)
+    assert m.holders_of("Preseli") == []
+    assert m.holders_of("") == []
+
+
+def test_contested_lists_only_ground_two_factions_claim(dcc_world):
+    m = FactionManager(dcc_world)
+    m.add_faction(TITHE)
+    m.add_faction(WOLVES)
+    m.claim(TITHE, CWM)
+    m.claim(TITHE, "Preseli")
+    m.claim(WOLVES, "cwm bedd")
+
+    contested = m.contested()
+    assert list(contested.keys()) == [CWM]
+    assert sorted(contested[CWM]) == sorted([TITHE, WOLVES])
+
+
+def test_claim_on_an_unknown_faction_returns_none(dcc_world):
+    assert FactionManager(dcc_world).claim("Nobody", CWM) is None
