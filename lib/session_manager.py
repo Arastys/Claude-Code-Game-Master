@@ -53,6 +53,7 @@ class SessionManager(EntityManager):
         "threat-clocks.json",
         "world-tracks.json",
         "factions.json",
+        "knowledge.json",
         "campaign-memory.json",
         "chronicler.json",
         "world-tick-log.json",
@@ -1048,6 +1049,22 @@ class SessionManager(EntityManager):
                         if rem:
                             lines.append(f"  {rem}")
 
+        # --- Knowledge ledger (who has actually been told what; silent unless used) ---
+        knowledge = self.json_ops.load_json("knowledge.json") or {}
+        if knowledge.get("propositions"):
+            from knowledge_manager import KnowledgeManager
+            roster = [npc_name for npc_name, _ in present_npcs]
+            if isinstance(char, dict) and char.get("name"):
+                roster.append(char["name"])
+            block = KnowledgeManager.render(
+                knowledge["propositions"], roster,
+                factions=self.json_ops.load_json("factions.json") or {},
+                full=full)
+            if block:
+                lines.append("")
+                lines.append("--- WHO KNOWS WHAT (present) ---")
+                lines.append(block)
+
         # --- Pending Consequences ---
         lines.append("")
         lines.append("--- PENDING CONSEQUENCES ---")
@@ -1492,6 +1509,15 @@ class SessionManager(EntityManager):
         """Get active character name"""
         campaign = self.json_ops.load_json(self.campaign_file)
         return campaign.get('current_character')
+
+    def session_number(self) -> int:
+        """Public alias for the current session number.
+
+        Other modules need this and should not reach through an underscore for
+        it. The derivation stays in _get_session_number, which the rest of this
+        class already calls.
+        """
+        return self._get_session_number()
 
     def _get_session_number(self) -> int:
         """Current session number, derived from matched start/end pairs.

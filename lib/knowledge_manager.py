@@ -1,0 +1,385 @@
+#!/usr/bin/env python3
+"""
+The knowledge ledger — who has actually been told what.
+
+`facts.json` holds world truth: global, unowned, uncontested. This owns the
+contested half. A proposition is a statement with a truth value; a stance is one
+named entity's relationship to it. Deception needs no separate machinery — a
+proposition marked `false` that someone holds as `knows` is a character who is
+certain and wrong.
+
+Nothing here decides who learns what. A stance is written when the fiction moves
+information, the same way a faction standing is written when a bargain is kept.
+There is no propagation and no inheritance: a faction's stance says nothing about
+its members, because a ledger that infers knowledge nobody was given fails at the
+one job it has.
+
+Absence is `unaware` and is never stored, so recording ignorance — the common
+case — costs nothing.
+"""
+
+import sys
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+from entity_manager import EntityManager
+
+TRUTHS = ("true", "false", "unresolved")
+STANCES = ("knows", "suspects")
+STATUSES = ("active", "dormant")
+UNAWARE = "unaware"
+BRIEF_LIMIT = 5
+
+
+def _norm(value: Any) -> str:
+    """Case-insensitive key, matching entity_manager.npcs_present."""
+    return str(value or "").strip().lower()
+
+
+def _one_of(value: Any, allowed: tuple, field: str) -> str:
+    normalized = _norm(value)
+    if normalized not in allowed:
+        raise ValueError(f"{field} must be one of {allowed}, got {value!r}")
+    return normalized
+
+
+def _id_order(pid: str):
+    """Sort key putting P9 before P10.
+
+    Ids are `P` plus a counter, so comparing them as raw strings orders P10 ahead
+    of P2. `touched` ties are the common case — every proposition written in one
+    session shares a session number — so at the brief's cap a string sort silently
+    dropped a lower-numbered proposition in favour of a higher one.
+    """
+    digits = str(pid)[1:]
+    if str(pid)[:1] == "P" and digits.isdigit():
+        return (0, int(digits))
+    return (1, str(pid))
+
+
+class KnowledgeManager(EntityManager):
+    """Propositions, and who holds a stance on them."""
+
+    def __init__(self, world_state_dir: str = None):
+        super().__init__(world_state_dir)
+        self._wsd = world_state_dir
+        self.knowledge_file = "knowledge.json"
+
+    def _load(self) -> Dict[str, Any]:
+        data = self.json_ops.load_json(self.knowledge_file) or {}
+        data.setdefault("next_id", 1)
+        data.setdefault("propositions", {})
+        return data
+
+    def _save(self, data: Dict[str, Any]) -> None:
+        self.json_ops.save_json(self.knowledge_file, data)
+
+    @staticmethod
+    def _record_in(entry: Dict[str, Any], knower: str) -> Optional[Dict[str, Any]]:
+        """The stance record this knower holds on this entry, or None."""
+        needle = _norm(knower)
+        for held, record in (entry.get("stances") or {}).items():
+            if _norm(held) == needle:
+                return record
+        return None
+
+    @staticmethod
+    def _stance_in(entry: Dict[str, Any], knower: str) -> str:
+        return (KnowledgeManager._record_in(entry, knower) or {}).get("stance", UNAWARE)
+
+    @staticmethod
+    def relevant(propositions: Dict[str, Any], present,
+                 limit: int = BRIEF_LIMIT):
+        """(shown, dormant_count, cut_count) — the active propositions this room
+        can act on.
+
+        Relevant means someone in `present` holds a stance, or `about` names one
+        of them. Relevance is what keeps the block short enough to read every
+        beat: an active proposition concerning people who are nowhere near this
+        scene stays silent until they walk on.
+
+        Most recently touched first, ties broken numerically by id so the order is
+        stable across runs. `limit=None` applies no cap. `cut_count` is how many
+        relevant propositions the cap dropped, so the caller can disclose the
+        remainder instead of truncating in silence.
+        """
+        present_norm = {_norm(p) for p in (present or []) if _norm(p)}
+        shown, dormant = [], 0
+        for pid, entry in (propositions or {}).items():
+            if _norm(entry.get("status", "active")) == "dormant":
+                dormant += 1
+                continue
+            holders = {_norm(k) for k in (entry.get("stances") or {})}
+            about = _norm(entry.get("about"))
+            if (holders & present_norm) or (about and about in present_norm):
+                shown.append((pid, entry))
+        shown.sort(key=lambda pe: (-int(pe[1].get("touched", 0) or 0),
+                                   _id_order(pe[0])))
+        if limit is None:
+            return shown, dormant, 0
+        return shown[:limit], dormant, max(0, len(shown) - limit)
+
+    @staticmethod
+    def render(propositions: Dict[str, Any], present, factions=None,
+               limit: int = BRIEF_LIMIT, full: bool = False) -> str:
+        """The WHO KNOWS WHAT body, or "" when nothing qualifies.
+
+        `factions` is passed in rather than read here so this module never
+        touches another manager's file. It is only used to name a present member
+        who is unaware of what their own faction knows — the tension that makes
+        the leak visible. It never implies the member knows.
+
+        `full=True` lifts the cap, matching the brief-wide rule that --full lifts
+        every bound. When the cap does bite, the remainder is disclosed rather
+        than dropped in silence.
+        """
+        shown, dormant, cut = KnowledgeManager.relevant(
+            propositions, present, None if full else limit)
+        if not shown:
+            return ""
+
+        roster_base = [str(p) for p in (present or []) if str(p).strip()]
+        lines = []
+        for pid, entry in shown:
+            truth = entry.get("truth", "unresolved")
+            lines.append(
+                f'{pid}  "{entry.get("statement", "")}"  '
+                f'({"FALSE" if truth == "false" else truth})')
+
+            seen = {_norm(n) for n in roster_base}
+            roster = list(roster_base)
+            for holder in (entry.get("stances") or {}):
+                if _norm(holder) not in seen:
+                    roster.append(holder)
+                    seen.add(_norm(holder))
+            width = max(len(n) for n in roster)
+
+            for name in roster:
+                record = KnowledgeManager._record_in(entry, name)
+                if record is None:
+                    lines.append(f"    {name.ljust(width)}  {UNAWARE}")
+                    continue
+                stance = record.get("stance", UNAWARE)
+                label = "KNOWS" if stance == "knows" else stance
+                detail = f"s{record.get('since', 0)}"
+                if record.get("source"):
+                    detail += f", {record['source']}"
+                line = f"    {name.ljust(width)}  {label.ljust(8)} {detail}"
+                blind = KnowledgeManager._members_unaware(
+                    entry, name, stance, present, factions)
+                if blind:
+                    verb = "does not" if len(blind) == 1 else "do not"
+                    line += f"  — {', '.join(blind)} {verb}"
+                lines.append(line)
+
+        if cut:
+            # Same shape as SessionManager._remainder. Kept local rather than
+            # imported, so this module stays free of session_manager the way it
+            # stays free of faction_manager; the format is pinned by a test so
+            # the two cannot drift apart unnoticed.
+            noun = "proposition" if cut == 1 else "propositions"
+            lines.append(
+                f"+{cut} more {noun} — --full or gm-know.sh list --active")
+        if dormant:
+            noun = "proposition" if dormant == 1 else "propositions"
+            lines.append(f"{dormant} dormant {noun} not shown.")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _members_unaware(entry, name, stance, present, factions):
+        """Present members of `name` (a faction that knows) who are unaware.
+
+        Reports the asymmetry. It never asserts that the member knows — that
+        would be the inheritance this system exists to refuse.
+        """
+        if stance != "knows" or not factions:
+            return []
+        faction = None
+        for fname, fdata in factions.items():
+            if _norm(fname) == _norm(name):
+                faction = fdata
+                break
+        if not isinstance(faction, dict):
+            return []
+        members = {_norm(x) for x in (faction.get("members") or [])}
+        return [str(p) for p in (present or [])
+                if _norm(p) in members
+                and KnowledgeManager._stance_in(entry, p) == UNAWARE]
+
+    def add_proposition(self, statement: str, truth: str = "unresolved",
+                        about: str = None, status: str = "active",
+                        session: int = 0) -> Dict[str, Any]:
+        """Create a proposition and return it with its assigned id."""
+        truth = _one_of(truth, TRUTHS, "truth")
+        status = _one_of(status, STATUSES, "status")
+        data = self._load()
+        pid = f"P{data['next_id']}"
+        data["next_id"] = int(data["next_id"]) + 1  # monotonic; ids are never reused
+        entry = {
+            "statement": str(statement),
+            "truth": truth,
+            "status": status,
+            "touched": int(session),
+            "stances": {},
+        }
+        if about:
+            entry["about"] = str(about)
+        data["propositions"][pid] = entry
+        self._save(data)
+        return dict(entry, id=pid)
+
+    def set_stance(self, pid: str, knower: str, stance: str,
+                   source: str = None, session: int = 0) -> Optional[Dict[str, Any]]:
+        """Record that this entity knows or suspects. Replaces any earlier stance."""
+        stance = _one_of(stance, STANCES, "stance")
+        data = self._load()
+        entry = data["propositions"].get(pid)
+        if entry is None:
+            return None
+        record = {"stance": stance, "since": int(session)}
+        if source:
+            record["source"] = str(source)
+        stances = entry.setdefault("stances", {})
+        for held in [k for k in stances if _norm(k) == _norm(knower)]:
+            del stances[held]
+        stances[knower] = record
+        entry["touched"] = int(session)
+        self._save(data)
+        return dict(entry, id=pid)
+
+    def forget(self, pid: str, knower: str) -> Optional[Dict[str, Any]]:
+        """Remove a stance, returning that knower to `unaware`."""
+        data = self._load()
+        entry = data["propositions"].get(pid)
+        if entry is None:
+            return None
+        stances = entry.setdefault("stances", {})
+        for held in [k for k in stances if _norm(k) == _norm(knower)]:
+            del stances[held]
+        self._save(data)
+        return dict(entry, id=pid)
+
+    def stance_of(self, pid: str, knower: str) -> str:
+        """`knows`, `suspects`, or `unaware`. Unaware is never stored."""
+        return self._stance_in(self._load()["propositions"].get(pid) or {}, knower)
+
+    def set_status(self, pid: str, status: str) -> Optional[Dict[str, Any]]:
+        status = _one_of(status, STATUSES, "status")
+        data = self._load()
+        entry = data["propositions"].get(pid)
+        if entry is None:
+            return None
+        entry["status"] = status
+        self._save(data)
+        return dict(entry, id=pid)
+
+    def get_propositions(self) -> Dict[str, Any]:
+        return self._load()["propositions"]
+
+    def who_knows(self, needle: str) -> Dict[str, Any]:
+        """Resolve by exact id first, else by case-insensitive substring of the
+        statement. A substring matching several returns all of them rather than
+        guessing which was meant."""
+        props = self.get_propositions()
+        if needle in props:
+            return {needle: props[needle]}
+        n = _norm(needle)
+        return {pid: e for pid, e in props.items()
+                if n and n in _norm(e.get("statement"))}
+
+    def held_by(self, knower: str) -> Dict[str, Any]:
+        """Every proposition this entity holds a stance on, with that stance.
+
+        Named `held_by` rather than `knows` so the verb never collides with the
+        stance value of the same name.
+        """
+        out = {}
+        for pid, entry in self.get_propositions().items():
+            stance = self._stance_in(entry, knower)
+            if stance != UNAWARE:
+                out[pid] = dict(entry, id=pid, stance=stance)
+        return out
+
+
+def _current_session() -> int:
+    """The live session number, or 0 if it cannot be read.
+
+    Imported lazily: session_manager is a large module and the ledger itself has
+    no need of it. Never read `session_count` from campaign-overview.json —
+    campaign_manager writes it once at creation and nothing increments it.
+    """
+    try:
+        from session_manager import SessionManager
+        return SessionManager().session_number()
+    except Exception:
+        return 0
+
+
+def main():
+    import argparse
+    import json
+    from cli_output import wants_json, strip_json_flag, emit, emit_error
+
+    parser = argparse.ArgumentParser(description="The knowledge ledger")
+    sub = parser.add_subparsers(dest="action")
+
+    p = sub.add_parser("add"); p.add_argument("statement")
+    p.add_argument("--truth", choices=TRUTHS, default="unresolved")
+    p.add_argument("--about")
+    p.add_argument("--status", choices=STATUSES, default="active")
+    p = sub.add_parser("stance"); p.add_argument("pid"); p.add_argument("knower")
+    p.add_argument("stance", choices=STANCES); p.add_argument("--source")
+    p = sub.add_parser("forget"); p.add_argument("pid"); p.add_argument("knower")
+    p = sub.add_parser("who-knows"); p.add_argument("needle")
+    p = sub.add_parser("held-by"); p.add_argument("knower")
+    p = sub.add_parser("status"); p.add_argument("pid")
+    p.add_argument("status", choices=STATUSES)
+    p = sub.add_parser("list")
+    p.add_argument("--active", action="store_true")
+    p.add_argument("--dormant", action="store_true")
+
+    json_mode = wants_json()
+    args = parser.parse_args(strip_json_flag(sys.argv[1:]))
+    if not args.action:
+        parser.print_help(); sys.exit(1)
+
+    m = KnowledgeManager()
+    session = _current_session()
+
+    if args.action == "add":
+        out = m.add_proposition(args.statement, truth=args.truth,
+                                about=args.about, status=args.status,
+                                session=session)
+    elif args.action == "stance":
+        out = m.set_stance(args.pid, args.knower, args.stance,
+                           source=args.source, session=session)
+    elif args.action == "forget":
+        out = m.forget(args.pid, args.knower)
+    elif args.action == "who-knows":
+        out = m.who_knows(args.needle)
+    elif args.action == "held-by":
+        out = m.held_by(args.knower)
+    elif args.action == "status":
+        out = m.set_status(args.pid, args.status)
+    else:
+        props = m.get_propositions()
+        if args.active:
+            props = {k: v for k, v in props.items() if v.get("status") == "active"}
+        elif args.dormant:
+            props = {k: v for k, v in props.items() if v.get("status") == "dormant"}
+        out = props
+
+    if out is None:
+        sys.exit(emit_error(
+            f"no such proposition: {getattr(args, 'pid', args.action)}", json_mode))
+
+    if json_mode:
+        emit(out, json_mode=True)
+    else:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
