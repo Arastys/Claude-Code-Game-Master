@@ -289,6 +289,39 @@ class PlayerManager(EntityManager):
 
         return result
 
+    def advance_resource(self, name: str, amount: int) -> Dict[str, Any]:
+        """Advance a resource-axis progression (years, viewers, spice...).
+
+        award_xp walks the xp-levels threshold table and cannot serve a kit whose
+        progression is an accumulating world resource. WorldKit already computes
+        both halves — this persists them. Level is the count of tiers reached, so
+        it indexes progression.tier_names directly.
+        """
+        char = self._load_character(name)
+        if not char:
+            print(f"[ERROR] Character '{name}' not found")
+            return {'success': False}
+
+        kit = self.world_kit()
+        resource = getattr(kit.progression, 'resource', None)
+        if not resource:
+            return {'success': False,
+                    'error': f"kit progression '{kit.progression.name}' has no resource axis"}
+
+        before = int(char.get(resource, 0))
+        level_before = kit.level(char)
+        char[resource] = int(kit.advance_progression(char, amount=int(amount))[resource])
+        level_after = kit.level(char)
+        char['level'] = level_after
+        self._save_character(char.get('name', name), char)
+
+        tier_names = ((kit.ruleset.get('progression') or {}).get('tier_names')) or []
+        tier = tier_names[level_after] if level_after < len(tier_names) else None
+        return {'success': True, 'resource': resource,
+                'before': before, 'after': int(char[resource]),
+                'level_before': level_before, 'level_after': level_after,
+                'tier': tier, 'tier_changed': level_after != level_before}
+
     def _spectacle_config(self) -> Dict[str, Any]:
         """Spectacle tier table + optional follower currency from the active kit.
         Tiers default to game_core.DEFAULT_SPECTACLE_TIERS; a kit overrides them
@@ -1057,6 +1090,13 @@ def main():
     xp_parser.add_argument('name', help='Character name')
     xp_parser.add_argument('amount', help='XP amount (can include + prefix)')
 
+    # Advance a resource-axis progression (years, viewers, spice, ...)
+    advance_parser = subparsers.add_parser(
+        'advance', help="Advance the kit's progression resource (resource-axis kits)")
+    advance_parser.add_argument('name', nargs='?', help='Character name (defaults to active PC)')
+    advance_parser.add_argument('--amount', type=int, required=True,
+                                help='How much of the resource to add (e.g. 10 years)')
+
     # Discretionary "spectacle" XP (kit-aware, level-scaled; co-awards followers)
     award_parser = subparsers.add_parser('award', help='Award level-scaled spectacle XP for a clever/effective/unique/punishing beat')
     award_parser.add_argument('name', nargs='?', help='Character name (optional; defaults to active PC)')
@@ -1204,6 +1244,17 @@ def main():
             sys.exit(emit_error(result.get('error', 'award failed'), json_mode=True))
         return
 
+    if json_mode and args.action == 'advance':
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = manager.advance_resource(args.name, args.amount)
+        if result.get('success'):
+            emit(result, json_mode=True)
+        else:
+            sys.exit(emit_error(result.get('error', 'advance failed'), json_mode=True))
+        return
+
     if args.action == 'show':
         if args.name:
             result = manager.show_player(args.name)
@@ -1242,6 +1293,14 @@ def main():
         result = manager.award_spectacle(args.name, args.tier, getattr(args, 'reason', None))
         if not result.get('success'):
             sys.exit(1)
+
+    elif args.action == 'advance':
+        result = manager.advance_resource(args.name, args.amount)
+        if not result.get('success'):
+            sys.exit(1)
+        print(f"{result['resource']}: {result['before']} -> {result['after']}")
+        if result['tier_changed']:
+            print(f"TIER CHANGE -> {result['tier'] or result['level_after']}")
 
     elif args.action == 'level-check':
         if not manager.get_xp_status(args.name):
