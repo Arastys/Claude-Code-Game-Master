@@ -153,3 +153,75 @@ def test_firing_keeps_stdout_parseable(dcc_world, capsys):
     m.adjust("Y Cof", 3)
     out = capsys.readouterr()
     assert out.out.strip() == "", f"fire leaked onto stdout: {out.out!r}"
+
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _run_cli(world, *args):
+    env = dict(os.environ, GM_WORLD_STATE_BASE=str(world))
+    return subprocess.run(
+        [sys.executable, str(REPO_ROOT / "lib" / "world_tracks.py"), *args],
+        capture_output=True, text=True, env=env, cwd=str(REPO_ROOT))
+
+
+def test_cli_list_emits_a_json_envelope(dcc_world):
+    WorldTrackManager(dcc_world).add_track("Y Cof", 6, thresholds=THRESHOLDS)
+    proc = _run_cli(dcc_world, "list", "--json")
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["data"]["Y Cof"]["max"] == 6
+
+
+def test_cli_adjust_json_stays_parseable_when_a_threshold_fires(dcc_world):
+    WorldTrackManager(dcc_world).add_track("Y Cof", 6, thresholds=THRESHOLDS)
+    proc = _run_cli(dcc_world, "adjust", "Y Cof", "--delta", "3", "--json")
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["data"]["after"] == 3
+    assert len(payload["data"]["fired"]) == 1
+
+
+# --- Wrapper-level test (additional requirement, beyond the brief) ---
+#
+# The two CLI tests above invoke lib/world_tracks.py directly via
+# sys.executable, which never touches tools/gm-track.sh. That is not enough:
+# a wrapper that turned out to be a `case` dispatcher rather than a genuine
+# `"$@"` pass-through to the Python manager would print a usage banner and
+# exit 0 while these tests kept passing. Drive the real bash wrapper as a
+# subprocess so a mis-wired wrapper is actually caught — json.loads() below
+# fails hard on a usage banner instead of silently accepting it.
+
+
+def _run_wrapper(dcc_world, *args):
+    return subprocess.run(
+        ["bash", str(REPO_ROOT / "tools" / "gm-track.sh"), *args],
+        capture_output=True, text=True,
+        env={**os.environ, "GM_WORLD_STATE_BASE": str(dcc_world)},
+        cwd=str(REPO_ROOT))
+
+
+def test_wrapper_list_reaches_the_python_manager(dcc_world):
+    WorldTrackManager(dcc_world).add_track("Y Cof", 6, thresholds=THRESHOLDS)
+    proc = _run_wrapper(dcc_world, "list", "--json")
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["data"]["Y Cof"]["max"] == 6
+
+
+def test_wrapper_adjust_reaches_the_python_manager_and_fires_a_consequence(dcc_world):
+    WorldTrackManager(dcc_world).add_track("Y Cof", 6, thresholds=THRESHOLDS)
+    proc = _run_wrapper(dcc_world, "adjust", "Y Cof", "--delta", "3", "--json")
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["data"]["after"] == 3
+    assert len(payload["data"]["fired"]) == 1

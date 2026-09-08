@@ -122,3 +122,60 @@ class WorldTrackManager(EntityManager):
             note = f" — {t['note']}" if t.get("note") else ""
             lines.append(f"{name}: [{bar}] {cur}/{mx}{note}")
         return "\n".join(lines)
+
+
+def main():
+    import argparse
+    import json
+    from cli_output import wants_json, strip_json_flag, emit, emit_error
+
+    parser = argparse.ArgumentParser(description="World tracks")
+    sub = parser.add_subparsers(dest="action")
+
+    p = sub.add_parser("add"); p.add_argument("name"); p.add_argument("max", type=int)
+    p.add_argument("--current", type=int, default=0)
+    p.add_argument("--note")
+    p.add_argument("--thresholds-json",
+                   help='[{"at": 3, "consequence": "..."}, ...]')
+
+    p = sub.add_parser("adjust"); p.add_argument("name")
+    p.add_argument("--delta", type=int, required=True)
+
+    p = sub.add_parser("set"); p.add_argument("name")
+    p.add_argument("--value", type=int, required=True)
+
+    p = sub.add_parser("remove"); p.add_argument("name")
+    sub.add_parser("list")
+
+    json_mode = wants_json()
+    args = parser.parse_args(strip_json_flag(sys.argv[1:]))
+    if not args.action:
+        parser.print_help(); sys.exit(1)
+
+    m = WorldTrackManager()
+    if args.action == "add":
+        thresholds = json.loads(args.thresholds_json) if args.thresholds_json else None
+        out = m.add_track(args.name, args.max, thresholds=thresholds,
+                          note=args.note, current=args.current)
+    elif args.action == "adjust":
+        out = m.adjust(args.name, args.delta)
+    elif args.action == "set":
+        out = m.set_value(args.name, args.value)
+    elif args.action == "remove":
+        out = {"removed": m.remove_track(args.name)}
+    else:
+        out = m.get_tracks()
+
+    if out is None:
+        sys.exit(emit_error(f"no such track: {args.name}", json_mode))
+
+    if json_mode:
+        emit(out, json_mode=True)
+    else:
+        print(json.dumps(out, indent=2))
+        if args.action == "list":
+            print(WorldTrackManager.render(out))
+
+
+if __name__ == "__main__":
+    main()
