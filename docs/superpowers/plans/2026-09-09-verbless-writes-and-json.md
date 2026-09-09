@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **A positional data slot never accepts a value beginning with `-`.** A category, a fact, a time of day and a date never legitimately start with a hyphen; a value that does is a mistake every time.
+- **A positional data slot never accepts a value beginning with `-`.** A category, a fact, a time of day and a date never legitimately start with a hyphen; a value that does is a mistake every time. Note that `--json` specifically is caught earlier, by arity, because `split_json_flag` removes it before the count is checked — the hyphen guard is what catches every other stray flag.
 - **`--json` is honoured or refused, never absorbed.** No tool may write a flag to disk as content.
 - **The `--json` envelope is exactly two shapes**, defined in `lib/cli_output.py`: `{"ok": true, "data": …}` and `{"ok": false, "error": "…", "code": null}`. The wiring is fixed: `wants_json()` to detect, `strip_json_flag()` before argparse, `emit()` / `emit_error()` to output. `emit_error` returns `1`, so callers write `sys.exit(emit_error(...))`.
 - **A manager that `print()`s human text from inside its logic must suppress it in JSON mode**, or the envelope arrives preceded by garbage. `lib/consequence_manager.py` does this with `contextlib.redirect_stdout`.
@@ -261,11 +261,26 @@ elif [ "$#" -eq 2 ]; then
     exit $?
 else
     echo "Usage: gm-note.sh <category> <fact>" >&2
+    if [ -n "$JSON_FLAG" ]; then
+        # Stripping --json left too few arguments, which means it was sitting in a
+        # data slot. Say so: the bare usage line would not tell the caller that the
+        # flag they passed was about to become the fact's text.
+        echo "[ERROR] --json is a flag, not content — it cannot occupy <category> or <fact>." >&2
+    fi
     exit 1
 fi
 ```
 
 `$JSON_FLAG` is deliberately unquoted so an empty value expands to nothing rather than an empty argument.
+
+**Two different mechanisms protect these slots, and it matters which fires when.**
+For `gm-note.sh list --json`, `split_json_flag` removes the flag first, so only one
+argument remains and the **arity** check refuses it — `reject_flag_in_data_slot`
+never runs. The guard is what catches every *other* hyphen-leading value:
+`--type`, `-x`, an unexpanded `$VAR` that came back as `-`. Both are required;
+neither covers the other's case. This is why the `if [ -n "$JSON_FLAG" ]` line
+above exists: without it the arity path refuses correctly but explains nothing, and
+the plan's own `test_the_refusal_names_the_offending_value` fails.
 
 - [ ] **Step 5: Guard `tools/gm-time.sh`**
 
@@ -712,7 +727,9 @@ In each of `lib/plot_manager.py`, `lib/location_manager.py` and `lib/campaign_ma
 
 Apply that shape to every branch that produces output. Branches that only mutate and `sys.exit(1)` on failure should emit `{"ok": true, "data": {...}}` describing what changed, and route their failure through `sys.exit(emit_error(...))`.
 
-Read each `main()` in full before editing — the three differ in how many branches they have and what each returns. Do not guess at a branch you have not read.
+Read each `main()` in full before editing — the three differ in how many branches they have and what each returns. Do not guess at a branch you have not read. Counted with `grep -c "args.action =="`: **`plot_manager.py` has 9 branches, `location_manager.py` has 6, `campaign_manager.py` has 9.** All three currently call a bare `parser.parse_args()`, so the `strip_json_flag(sys.argv[1:])` change applies identically to each.
+
+Two branches worth knowing before you start: `plot_manager.py`'s `counts` already prints `json.dumps(manager.get_plot_counts())` — it needs the envelope wrapped around existing data, not new data — and `threads` has `manager.get_active_threads()` in hand before formatting, so both are straightforward to emit.
 
 - [ ] **Step 4: Forward the flag in the three wrappers**
 
@@ -760,7 +777,9 @@ git commit -m "plot/location/campaign: forward --json through every case branch"
 
 `CLAUDE.md` says "All tools take `--json` for structured returns." After Tasks 2 and 3 that is true, so the sentence stands unchanged — verify it rather than editing it.
 
-`docs/conventions/tool-wrapper-contract.md`'s "Enforcement point" section says `tests/test_json_wrappers_*.py` covers "player, npc, session, consequence". None of those four files exists. Only `tests/test_json_wrappers_onboard.py` does, plus the new `tests/test_json_wrappers_tools.py`. Envelope assertions do live in ten other files.
+`docs/conventions/tool-wrapper-contract.md`'s "Enforcement point" section says `tests/test_json_wrappers_*.py` covers "player, npc, session, consequence". **None of those four files exists.** Only `tests/test_json_wrappers_onboard.py` does, plus the new `tests/test_json_wrappers_tools.py`. Envelope assertions do live in ten other files (`test_faction_manager.py`, `test_knowledge_manager.py`, `test_world_tracks.py`, `test_kit_systems.py`, `test_play_pack.py`, and others), so the contract is better enforced than the doc's sentence implies — just not where it says.
+
+The doc's **OKF frontmatter also carries `- { resource: /tests/test_json_wrappers_player.py }`**, a resource pointer to one of the files that was never written. Fix that line too; a frontmatter resource that does not resolve is the same false claim in a machine-readable slot.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -768,14 +787,34 @@ Append to `tests/test_json_wrappers_tools.py`:
 
 ```python
 def test_the_wrapper_contract_names_enforcement_files_that_exist():
-    """The convention doc claimed four test files that were never written. A
-    convention that misstates where it is enforced invites the gap it exists to
-    prevent."""
+    """The convention doc claims four enforcement test files; none exists.
+
+    Two places hide a filename here, and a naive path regex sees only one of them:
+    the OKF frontmatter carries `- { resource: /tests/test_json_wrappers_player.py }`,
+    and the prose says `tests/test_json_wrappers_*.py (player, npc, session,
+    consequence)` — where three of the four names are bare words inside a
+    parenthesis, not paths. Check both, or this test passes while three false
+    claims stand.
+    """
+    import re
     doc = (REPO_ROOT / "docs" / "conventions" / "tool-wrapper-contract.md").read_text(
         encoding="utf-8")
-    import re
-    for name in re.findall(r"tests/test_json_wrappers_(\w+)\.py", doc):
-        assert (REPO_ROOT / "tests" / f"test_json_wrappers_{name}.py").exists(), name
+    tests_dir = REPO_ROOT / "tests"
+
+    def _missing(stem):
+        return not (tests_dir / f"test_json_wrappers_{stem}.py").exists()
+
+    missing = [f"test_json_wrappers_{n}.py"
+               for n in re.findall(r"tests/test_json_wrappers_(\w+)\.py", doc)
+               if _missing(n)]
+
+    glob_list = re.search(r"tests/test_json_wrappers_\*\.py`?\s*\(([^)]*)\)", doc)
+    if glob_list:
+        missing += [f"test_json_wrappers_{w.strip()}.py (from the glob's own list)"
+                    for w in re.split(r",\s*", glob_list.group(1))
+                    if w.strip() and _missing(w.strip())]
+
+    assert not missing, "doc names enforcement files that do not exist: " + ", ".join(missing)
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
@@ -785,7 +824,7 @@ Expected: fails on the first name the doc lists that has no file.
 
 - [ ] **Step 3: Correct the doc**
 
-Rewrite the "Enforcement point" section's first sentence to name only files that exist, and to say plainly where the envelope is actually asserted. Read the current section before editing; keep its voice, and keep the closing point that a new manager gets no enforcement until a matching test exists.
+Rewrite the "Enforcement point" section's first sentence to name only files that exist, and to say plainly where the envelope is actually asserted. Also correct the frontmatter `resource:` line that points at `/tests/test_json_wrappers_player.py`. Read the current section before editing; keep its voice, and keep the closing point that a new manager gets no enforcement until a matching test exists.
 
 - [ ] **Step 4: Verify the CLAUDE.md claim is now true**
 
