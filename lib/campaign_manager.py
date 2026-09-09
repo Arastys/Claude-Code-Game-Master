@@ -424,6 +424,12 @@ class CampaignManager:
 def main():
     """CLI interface for campaign management"""
     import argparse
+    import contextlib
+    import io as _io
+
+    from cli_output import wants_json, strip_json_flag, emit, emit_error
+
+    json_mode = wants_json()
 
     parser = argparse.ArgumentParser(description='Campaign management')
     subparsers = parser.add_subparsers(dest='action', help='Action to perform')
@@ -468,16 +474,30 @@ def main():
     resolve_parser.add_argument('--world-state', default='world-state',
                                 help='World state directory (default: world-state)')
 
-    args = parser.parse_args()
+    args = parser.parse_args(strip_json_flag(sys.argv[1:]))
 
     if not args.action:
         parser.print_help()
         sys.exit(1)
 
+    def _quiet():
+        """The manager prints [SUCCESS]/[ERROR] from inside its own logic; in JSON
+        mode that text would precede the envelope and break json.loads."""
+        return (contextlib.redirect_stdout(_io.StringIO()) if json_mode
+                else contextlib.nullcontext())
+
+    def _fail(message, status=1):
+        """JSON mode gets the error envelope; human mode keeps the manager's own
+        message and its bare exit status, byte for byte as before."""
+        if json_mode:
+            emit_error(message, json_mode)
+        sys.exit(status)
+
     if args.action == 'slugify':
         # Pure string work — answer before constructing a manager, which would
         # create world-state/campaigns relative to the caller's cwd.
-        print(CampaignManager._slugify(args.name))
+        slug = CampaignManager._slugify(args.name)
+        emit(slug, message=slug, json_mode=json_mode)
         return
 
     if args.action == 'resolve':
@@ -488,15 +508,19 @@ def main():
         campaigns_dir = Path(resolve_world_state_base(args.world_state)) / "campaigns"
         resolved = CampaignManager._resolve_in(campaigns_dir, args.name)
         if not (campaigns_dir / resolved).is_dir():
-            sys.exit(3)
-        print(resolved)
+            # Exit 3 is the documented "no such campaign" signal; JSON mode adds the
+            # envelope but must not change the status a shell caller branches on.
+            _fail(f"no such campaign: {args.name}", status=3)
+        emit(resolved, message=resolved, json_mode=json_mode)
         return
 
     manager = CampaignManager()
 
     if args.action == 'list':
         campaigns = manager.list_campaigns()
-        if not campaigns:
+        if json_mode:
+            emit({'active': manager.get_active(), 'campaigns': campaigns}, json_mode=True)
+        elif not campaigns:
             print("No campaigns found")
             print("Create one with: gm-campaign.sh create <name>")
         else:
@@ -518,37 +542,53 @@ def main():
     elif args.action == 'active':
         active = manager.get_active()
         if active:
-            print(active)
+            emit(active, message=active, json_mode=json_mode)
         else:
+            if json_mode:
+                _fail("no active campaign set")
             print("No active campaign set")
             sys.exit(1)
 
     elif args.action == 'switch':
-        if not manager.set_active(args.name):
-            sys.exit(1)
+        with _quiet():
+            switched = manager.set_active(args.name)
+        if not switched:
+            _fail(f"no such campaign: {args.name}")
+        emit({'active': manager.get_active()}, json_mode=json_mode)
 
     elif args.action == 'create':
         campaign_name = args.campaign_name or f"{args.name}'s Adventure"
-        path = manager.create(args.name, campaign_name)
+        with _quiet():
+            path = manager.create(args.name, campaign_name)
         if not path:
-            sys.exit(1)
-        print(f"Campaign created at: {path}")
+            _fail(f"could not create campaign: {args.name}")
+        emit({'name': path.name, 'campaign_name': campaign_name, 'path': str(path)},
+             message=f"Campaign created at: {path}", json_mode=json_mode)
 
     elif args.action == 'delete':
-        if not manager.delete(args.name, confirm=args.confirm):
-            sys.exit(1)
+        with _quiet():
+            deleted = manager.delete(args.name, confirm=args.confirm)
+        if not deleted:
+            _fail(f"could not delete campaign: {args.name}")
+        emit({'deleted': args.name}, json_mode=json_mode)
 
     elif args.action == 'info':
-        info = manager.get_info(args.name)
+        with _quiet():
+            info = manager.get_info(args.name)
         if not info:
-            sys.exit(1)
-        print(json.dumps(info, indent=2))
+            _fail(f"no such campaign: {args.name or '(active)'}")
+        if json_mode:
+            emit(info, json_mode=True)
+        else:
+            print(json.dumps(info, indent=2))
 
     elif args.action == 'path':
         path = manager.get_campaign_path(args.name)
         if path:
-            print(path)
+            emit(str(path), message=str(path), json_mode=json_mode)
         else:
+            if json_mode:
+                _fail(f"no such campaign: {args.name or '(active)'}")
             print("Campaign not found", file=sys.stderr)
             sys.exit(1)
 

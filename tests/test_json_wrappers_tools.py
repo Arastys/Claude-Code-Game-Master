@@ -85,3 +85,49 @@ def test_time_update_does_not_leak_human_text_into_the_envelope(tmp_path):
     proc = _run(world, "gm-time.sh", "Dawn", "The ninth day", "--json")
     assert proc.stdout.lstrip().startswith("{")
     assert "[SUCCESS]" not in proc.stdout
+
+
+def test_plot_list_emits_an_envelope(tmp_path):
+    world, _ = _world(tmp_path)
+    _run(world, "gm-plot.sh", "add", "The Cup", "--description", "A thread.")
+    assert isinstance(_envelope(_run(world, "gm-plot.sh", "list", "--json")), (list, dict))
+
+
+def test_plot_show_forwards_json_through_a_single_argument_branch(tmp_path):
+    """`show` passes only "$1" to Python, so a trailing --json was dropped and the
+    caller got human text having asked for an envelope. This is the branch shape
+    that made a whole verb's flag invisible."""
+    world, _ = _world(tmp_path)
+    _run(world, "gm-plot.sh", "add", "The Cup", "--description", "A thread.")
+    data = _envelope(_run(world, "gm-plot.sh", "show", "The Cup", "--json"))
+    assert "Cup" in json.dumps(data)
+
+
+def test_plot_counts_forwards_json_through_a_no_argument_branch(tmp_path):
+    world, _ = _world(tmp_path)
+    assert _envelope(_run(world, "gm-plot.sh", "counts", "--json")) is not None
+
+
+def test_plot_threads_forwards_json(tmp_path):
+    world, _ = _world(tmp_path)
+    assert _run(world, "gm-plot.sh", "threads", "--json").returncode == 0
+
+
+def test_location_list_emits_an_envelope(tmp_path):
+    world, _ = _world(tmp_path)
+    _run(world, "gm-location.sh", "add", "Y Bedd", "the ridge")
+    assert _envelope(_run(world, "gm-location.sh", "list", "--json")) is not None
+
+
+def test_campaign_list_emits_an_envelope(tmp_path):
+    world, _ = _world(tmp_path)
+    assert _envelope(_run(world, "gm-campaign.sh", "list", "--json")) is not None
+
+
+def test_no_tool_ever_writes_the_flag_as_data(tmp_path):
+    """The blanket guarantee: --json is honoured or refused, never absorbed."""
+    world, campaign = _world(tmp_path)
+    for tool, args in [("gm-note.sh", ["list"]), ("gm-time.sh", ["list"])]:
+        proc = _run(world, tool, *args, "--json")
+        assert proc.returncode != 0, f"{tool} accepted a flag as data"
+    assert json.loads((campaign / "facts.json").read_text(encoding="utf-8")) == {}
