@@ -333,8 +333,16 @@ def main():
             print("No locations found")
 
     elif args.action == 'connections':
-        connections = manager.get_connections(args.name)
+        # get_connections() calls get_location(), which prints its [ERROR] to STDOUT
+        # when the name is unknown — unquieted, that text lands ahead of the envelope.
+        with _quiet():
+            connections = manager.get_connections(args.name)
         if json_mode:
+            # An unknown location yields [] here, indistinguishable from a known one
+            # with no roads, and human mode calls neither a failure (it exits 0). The
+            # flag changes the SHAPE of an answer, never its status, so this stays
+            # ok: true. A caller that needs existence asks `get`, which reports
+            # ok: false.
             emit(connections, json_mode=True)
         elif connections:
             print(json.dumps(connections, indent=2))

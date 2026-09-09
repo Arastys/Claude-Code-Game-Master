@@ -109,8 +109,11 @@ def test_plot_counts_forwards_json_through_a_no_argument_branch(tmp_path):
 
 
 def test_plot_threads_forwards_json(tmp_path):
+    """`threads` forwarded NO arguments at all before the fix and still exited 0, so
+    a returncode-only assertion passed against the broken wrapper. Parse the
+    envelope instead — that is the only thing the flag was asked for."""
     world, _ = _world(tmp_path)
-    assert _run(world, "gm-plot.sh", "threads", "--json").returncode == 0
+    assert _envelope(_run(world, "gm-plot.sh", "threads", "--json")) is not None
 
 
 def test_location_list_emits_an_envelope(tmp_path):
@@ -131,3 +134,23 @@ def test_no_tool_ever_writes_the_flag_as_data(tmp_path):
         proc = _run(world, tool, *args, "--json")
         assert proc.returncode != 0, f"{tool} accepted a flag as data"
     assert json.loads((campaign / "facts.json").read_text(encoding="utf-8")) == {}
+
+
+def test_location_get_on_a_missing_name_is_a_clean_error_envelope(tmp_path):
+    """get_location prints its [ERROR] to STDOUT, so an unquieted call puts human
+    text ahead of the envelope and json.loads sees garbage."""
+    world, _ = _world(tmp_path)
+    proc = _run(world, "gm-location.sh", "get", "Nowhere At All", "--json")
+    assert "[ERROR]" not in proc.stdout, proc.stdout
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is False
+    assert proc.returncode != 0
+
+
+def test_location_connections_on_a_missing_name_still_parses(tmp_path):
+    """get_connections() calls get_location() internally, which printed
+    "[ERROR] Location '...' not found" to stdout ahead of the envelope."""
+    world, _ = _world(tmp_path)
+    proc = _run(world, "gm-location.sh", "connections", "Nowhere At All", "--json")
+    assert "[ERROR]" not in proc.stdout, proc.stdout
+    assert _envelope(proc) == []
