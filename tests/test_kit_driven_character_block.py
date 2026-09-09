@@ -482,3 +482,56 @@ def test_party_members_keep_5e_fields_when_the_sheet_carries_them(tmp_path):
     assert "Mair (Lvl 2 Human Fighter)" in ctx
     assert "AC: 16" in ctx
     assert "HP: 9/9" in ctx
+
+
+def test_party_members_render_declared_traits(tmp_path):
+    """The CHARACTER block renders kit traits; the party block must agree. A kit
+    declaring `generation` showed it for the PC and hid it from a follower whose
+    sheet carried the very same field."""
+    kit = {
+        "name": "custom",
+        "stat_schema": {"attributes": ["might"], "vitals": ["hp"],
+                        "traits": ["generation"]},
+        "progression": {"model": "milestone"},
+    }
+    world = _party_world(
+        tmp_path, "traits-party", kit,
+        {"name": "Rhiannon", "level": 0, "hp": {"current": 30, "max": 30},
+         "generation": 5},
+        {"level": 2, "hp": 6, "generation": 6})
+    ctx = SessionManager(world).get_full_context()
+    party = ctx.split("--- PARTY MEMBERS ---", 1)[1].split("--- NPC VOICES", 1)[0]
+    assert "Generation: 6" in party
+
+
+def test_show_player_renders_declared_traits(tmp_path):
+    """Same gap from the other end: `gm-player.sh show` must not report a
+    different set of facts about the character than the CHARACTER brief does."""
+    from lib.player_manager import PlayerManager
+    kit = {
+        "name": "custom",
+        "stat_schema": {"attributes": ["might"], "vitals": ["hp", "blood"],
+                        "traits": ["generation"]},
+        "progression": {"model": "milestone"},
+    }
+    world = _world(tmp_path, "traits-show", kit, {
+        "name": "Rhiannon", "level": 0, "hp": {"current": 30, "max": 30},
+        "blood": 7, "generation": 5,
+    })
+    out = PlayerManager(world).show_player("Rhiannon")
+    assert "Blood: 7" in out
+    assert "Generation: 5" in out
+
+
+def test_show_player_kit_declaring_no_traits_is_unaffected(tmp_path):
+    """Named distinctly from the existing CHARACTER-block-level
+    test_a_kit_declaring_no_traits_is_unaffected (line 163) — the Part B plan
+    proposed the same name for a show_player-level test, which would have
+    silently shadowed that earlier test rather than adding coverage."""
+    from lib.player_manager import PlayerManager
+    world = _world(tmp_path, "no-traits", PARTY_KIT, {
+        "name": "Rhiannon", "level": 0, "hp": {"current": 30, "max": 30},
+        "blood": 7,
+    })
+    out = PlayerManager(world).show_player("Rhiannon")
+    assert out.rstrip().endswith("Blood: 7")

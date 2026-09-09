@@ -212,7 +212,7 @@ class PlayerManager(EntityManager):
             return None
 
         summary = self._identity_line(char, name) + self._detail_segments(char)
-        summary += self._vitals_summary(char)
+        summary += self._vitals_summary(char) + self._traits_summary(char)
         status = char.get('status')
         if status in ('dying', 'dead'):
             summary += f" | {status.upper()}"
@@ -228,7 +228,7 @@ class PlayerManager(EntityManager):
             return []
         return [
             self._identity_line(char) + self._detail_segments(char)
-            + self._vitals_summary(char)
+            + self._vitals_summary(char) + self._traits_summary(char)
         ]
 
     def set_current_player(self, name: str) -> bool:
@@ -578,6 +578,21 @@ class PlayerManager(EntityManager):
             current, maximum = self._read_vital(char, vital)
             value = f"{current}/{maximum}" if maximum is not None else f"{current}"
             parts.append(f"{stat_label(vital)}: {value}")
+        return f" | {' | '.join(parts)}" if parts else ""
+
+    def _traits_summary(self, char: Dict) -> str:
+        """' | Generation: 5' for the kit traits the sheet carries.
+
+        Sibling of _vitals_summary. A trait is a fixed property the world cares
+        about and the engine deliberately does not understand; the CHARACTER brief
+        already renders them, and `show` reporting a different set of facts about
+        the same character is the cross-surface drift this plan exists to delete.
+        """
+        parts = []
+        for trait in self.world_kit().traits():
+            if trait not in char:
+                continue
+            parts.append(f"{stat_label(trait)}: {char[trait]}")
         return f" | {' | '.join(parts)}" if parts else ""
 
     def modify_vital(self, name: str, vital: str, amount: Optional[int] = None,
