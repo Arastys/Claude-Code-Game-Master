@@ -8,12 +8,20 @@
 
 source "$(dirname "$0")/common.sh"
 
+split_json_flag "$@"
+set -- ${GM_ARGS+"${GM_ARGS[@]}"}
+
 if [ -z "$1" ] || [ -z "$2" ]; then
     echo "Usage: gm-time.sh <time_of_day> <date> [--ticks N] [--duration \"<text>\"]"
     echo "Example: gm-time.sh \"Dawn\" \"16th day of Harvestmoon, Year 1247\""
     echo "         gm-time.sh \"Noon\" \"19th of Harvestmoon\" --duration \"3 days\""
     exit 1
 fi
+
+# No verb here either: $1 and $2 are the time of day and the date. A stray flag in
+# either slot was written to the overview and then advanced every time-clock.
+reject_flag_in_data_slot "time_of_day" "$1" || exit 1
+reject_flag_in_data_slot "date" "$2" || exit 1
 
 TIME_OF_DAY="$1"
 DATE="$2"
@@ -71,4 +79,7 @@ $PYTHON_CMD "$LIB_DIR/threat_clocks.py" tick-time --ticks "$CLOCK_TICKS"
 # Reactivity: time passing can fire on_time consequences (e.g. nightfall, deadlines).
 echo ""
 bash "$TOOLS_DIR/gm-consequence.sh" tick
-exit 0
+# Propagate the tick's status. Every earlier step in this script checks $? and
+# exits on failure; this one used to discard it, so a failed consequence tick was
+# reported as success.
+exit $?

@@ -147,6 +147,51 @@ validate_name() {
     return 0
 }
 
+# Pull --json out of the positional arguments.
+#
+# A `case`-dispatching wrapper cannot simply forward "$@" to Python: several
+# branches pass only "$1"/"$2", so a trailing --json is silently dropped and the
+# caller gets human text having asked for an envelope. Pulling the flag out first
+# lets every branch forward it explicitly.
+#
+# Sets JSON_FLAG to "--json" or "", and leaves the remaining arguments in GM_ARGS.
+# Callers re-apply them with:
+#     split_json_flag "$@"; set -- ${GM_ARGS+"${GM_ARGS[@]}"}
+# The ${GM_ARGS+...} form is required: a bare "${GM_ARGS[@]}" on an empty array
+# errors under `set -u`.
+split_json_flag() {
+    JSON_FLAG=""
+    GM_ARGS=()
+    local _a
+    for _a in "$@"; do
+        if [ "$_a" = "--json" ]; then
+            JSON_FLAG="--json"
+        else
+            GM_ARGS+=("$_a")
+        fi
+    done
+}
+
+# Refuse a value beginning with a hyphen in a positional DATA slot.
+#
+# gm-note.sh and gm-time.sh take no subcommand — their first positional IS data —
+# so every string was a valid category and a valid time of day, and no invocation
+# could be malformed. `gm-note.sh list --json` recorded a permanent fact whose text
+# was "--json"; `gm-time.sh list --json` set the campaign date to "--json" and
+# advanced every time-clock. A category, a fact, a time of day and a date never
+# legitimately begin with "-", so a value that does is a mistake every time.
+reject_flag_in_data_slot() {
+    local _slot="$1" _value="$2"
+    case "$_value" in
+        -*)
+            echo "[ERROR] $_slot cannot begin with '-' (got: $_value)" >&2
+            echo "        This position takes data, not a flag." >&2
+            return 1
+            ;;
+    esac
+    return 0
+}
+
 # Color output functions (only if terminal supports it)
 if [ -t 1 ] && [ "${TERM}" != "dumb" ]; then
     RED='\033[0;31m'
