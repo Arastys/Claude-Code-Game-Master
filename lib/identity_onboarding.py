@@ -47,6 +47,21 @@ class IdentityOnboarding(EntityManager):
         inv["items"] = list(items)
         return inv
 
+    def _canon_vitals(self, sheet: Dict[str, Any]) -> Dict[str, Any]:
+        """hp always; ac only when the sheet carries one, or on a 5e kit.
+
+        The old unconditional `sheet.get("ac", 10)` gave an armour class to every
+        canon NPC lifted into the PC slot, including on worlds that have no such
+        concept. Same defect family as save_character.py's DND_SHEET_DEFAULTS, and
+        gated the same way — through the kit, never through a name.
+        """
+        vitals = {"hp": copy.deepcopy(sheet.get("hp", _default_vitals()["hp"]))}
+        if "ac" in sheet:
+            vitals["ac"] = sheet["ac"]
+        elif self._is_dnd5e:
+            vitals["ac"] = 10
+        return vitals
+
     def from_canon(self, npc_name: str) -> Optional[Dict[str, Any]]:
         """Lift a canon character from npcs.json (stats from a sheet if present, voice from context).
 
@@ -66,7 +81,7 @@ class IdentityOnboarding(EntityManager):
             # (died_at / cause) can never ride along into the new PC.
             "status": "alive",
             "identity": {"name": npc_name, "race": sheet.get("race", ""), "class": sheet.get("class", "")},
-            "vitals": {"hp": copy.deepcopy(sheet.get("hp", _default_vitals()["hp"])), "ac": sheet.get("ac", 10)},
+            "vitals": self._canon_vitals(sheet),
             "attributes": dict(sheet.get("stats", {})),
             "progression": {"level": sheet.get("level", 1)},
             "inventory": self._inventory(sheet.get("equipment", [])),

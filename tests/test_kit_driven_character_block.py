@@ -32,6 +32,12 @@ DND5E_RULESET = {
     "resolution": {"model": "d20-vs-dc"},
 }
 
+SCALAR_KIT = {
+    "name": "custom",
+    "stat_schema": {"attributes": ["might"], "vitals": ["hp"]},
+    "progression": {"model": "milestone"},
+}
+
 
 def _world(tmp_path, slug, ruleset, character):
     world = tmp_path / "world-state"
@@ -316,3 +322,71 @@ def test_race_declared_as_a_trait_does_not_double_with_identity(tmp_path):
     })
     line = _character_line(world)
     assert line.count("Cimmerian") == 1
+
+
+def test_revive_survives_a_sheet_whose_hp_is_a_plain_number(tmp_path):
+    """A kit may model hp as a bare int. `revive` read char['hp'].get('max') and
+    then assigned char['hp']['current'], so on such a kit reviving raised
+    AttributeError and the character could never come back."""
+    from pathlib import Path
+    from lib.player_manager import PlayerManager
+    world = _world(tmp_path, "scalar-hp", SCALAR_KIT, {
+        "name": "Nomad", "level": 1, "hp": 0, "status": "dead",
+        "died_at": "somewhen", "stats": {"might": 3},
+    })
+    assert PlayerManager(world).revive("Nomad", reason="dragged back")["success"] is True
+    stored = json.loads(
+        (Path(world) / "campaigns" / "scalar-hp" / "character.json").read_text(
+            encoding="utf-8"))
+    assert stored["status"] == "alive"
+    assert stored["hp"] == 1          # still a plain number, not a dict
+    assert "died_at" not in stored
+
+
+def test_revive_still_clamps_against_a_dict_shaped_max(tmp_path):
+    from pathlib import Path
+    from lib.player_manager import PlayerManager
+    world = _world(tmp_path, "dict-hp", SCALAR_KIT, {
+        "name": "Nomad", "level": 1, "hp": {"current": 0, "max": 4},
+        "status": "dead", "stats": {"might": 3},
+    })
+    PlayerManager(world).revive("Nomad", hp=99)
+    stored = json.loads(
+        (Path(world) / "campaigns" / "dict-hp" / "character.json").read_text(
+            encoding="utf-8"))
+    assert stored["hp"] == {"current": 4, "max": 4}
+
+
+def _world_with_npc(tmp_path, slug, ruleset, npc_sheet):
+    """`_world` writes a PC but no npcs.json; from_canon needs one."""
+    from pathlib import Path
+    world = _world(tmp_path, slug, ruleset,
+                   {"name": "Placeholder", "level": 1, "hp": {"current": 1, "max": 1}})
+    (Path(world) / "campaigns" / slug / "npcs.json").write_text(json.dumps({
+        "Mair": {"description": "a weaver", "attitude": "neutral",
+                 "character_sheet": npc_sheet},
+    }), encoding="utf-8")
+    return world
+
+
+def test_from_canon_does_not_invent_an_armour_class(tmp_path):
+    """Lifting a canon NPC to PC gave every world an `ac`. Same defect family as
+    save_character.py's DND_SHEET_DEFAULTS, which is already kit-gated."""
+    from lib.identity_onboarding import IdentityOnboarding
+    world = _world_with_npc(tmp_path, "no-armour", SCALAR_KIT,
+                            {"level": 2, "hp": {"current": 6, "max": 6}})
+    assert "ac" not in IdentityOnboarding(world).from_canon("Mair")["vitals"]
+
+
+def test_from_canon_keeps_an_authored_armour_class_on_any_kit(tmp_path):
+    from lib.identity_onboarding import IdentityOnboarding
+    world = _world_with_npc(tmp_path, "authored-ac", SCALAR_KIT,
+                            {"level": 2, "ac": 13, "hp": {"current": 6, "max": 6}})
+    assert IdentityOnboarding(world).from_canon("Mair")["vitals"]["ac"] == 13
+
+
+def test_from_canon_still_defaults_armour_class_on_dnd5e(tmp_path):
+    from lib.identity_onboarding import IdentityOnboarding
+    world = _world_with_npc(tmp_path, "realms", DND5E_RULESET,
+                            {"level": 2, "hp": {"current": 9, "max": 9}})
+    assert IdentityOnboarding(world).from_canon("Mair")["vitals"]["ac"] == 10

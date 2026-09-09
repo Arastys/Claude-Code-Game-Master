@@ -709,12 +709,18 @@ class PlayerManager(EntityManager):
                 'error': 'character is not dead',
             }
 
-        max_hp = char.get('hp', {}).get('max', 0)
+        _, max_hp = self._read_vital(char, 'hp')
         new_hp = max(1, 1 if hp is None else hp)   # never alive at 0
         if max_hp:
             new_hp = min(new_hp, max_hp)
-        char.setdefault('hp', {})
-        char['hp']['current'] = new_hp
+        # Write back in the shape the sheet already uses. The old code assumed a
+        # dict — `.get('max')` raised AttributeError on a kit that models hp as a
+        # bare number, and the item assignment would have raised TypeError right
+        # after — so on such a kit a dead character could never be revived.
+        if isinstance(char.get('hp'), dict):
+            char['hp']['current'] = new_hp
+        else:
+            char['hp'] = new_hp
         char['status'] = 'alive'
         char.pop('died_at', None)
         char.pop('cause', None)
