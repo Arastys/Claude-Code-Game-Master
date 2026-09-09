@@ -128,3 +128,11 @@ becomes an incident. Verified in the source at the lines named, 2026-09-08.
 
 Items 3 and 4 are one-line fixes with a test each. Items 1 and 2 are the same
 kit-driven render treatment this plan gave the CHARACTER block, applied twice more.
+
+**All four were fixed on 2026-09-09**, by
+`docs/superpowers/plans/2026-09-09-last-hardcoded-renderers.md`, along with a fifth
+site this list missed: `show_player` / `show_all_players` printed `?` for race and
+class and a Gold field for coinless worlds, on the surface behind
+`gm-player.sh show`. `tools/gm-statusline.sh` also gained `GM_WORLD_STATE_BASE`
+support and its first tests — it had none, which is precisely how it stayed a
+hardcoded template while every other character surface was made kit-driven.
