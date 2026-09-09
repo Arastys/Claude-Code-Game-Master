@@ -20,6 +20,10 @@ def _run(world):
     proc = subprocess.run(
         ["bash", str(REPO_ROOT / "tools" / "gm-statusline.sh")],
         input="{}", capture_output=True, text=True,
+        # Decode as UTF-8 explicitly. Without this, subprocess uses the Windows
+        # locale encoding and the HUD's box-drawing and bar glyphs come back as
+        # mojibake, so no test could assert on anything but ASCII.
+        encoding="utf-8", errors="replace",
         env={**os.environ, "GM_WORLD_STATE_BASE": str(world)},
         cwd=str(REPO_ROOT))
     assert proc.returncode == 0, proc.stderr
