@@ -182,3 +182,24 @@ def test_the_hud_still_reports_no_campaign_and_no_character(tmp_path):
     (world / "campaigns" / "probe").mkdir(parents=True)
     (world / "active-campaign.txt").write_text("probe", encoding="utf-8")
     assert "no character yet" in _run(world)
+
+
+def test_a_scalar_hp_track_draws_no_bar(tmp_path):
+    """An empty ten-cell bar beside a healthy character reads as an empty tank.
+
+    Drawing a bar asserts a proportion, and a plain-number track has no maximum
+    to draw one against — the same class of assertion that made a full-health
+    character render as Critical before the bar/state split was fixed.
+    """
+    out = _run(_world(tmp_path, "probe", CUSTOM,
+                      {"name": "Nomad", "level": 1, "hp": 6}))
+    assert "HP 6" in out
+    assert "░" not in out
+    assert "█" not in out
+
+
+def test_a_dict_hp_track_still_draws_its_bar(tmp_path):
+    out = _run(_world(tmp_path, "probe", CUSTOM,
+                      {"name": "Bram", "level": 1, "hp": {"current": 10, "max": 30}}))
+    assert "10/30" in out
+    assert "█" in out and "░" in out

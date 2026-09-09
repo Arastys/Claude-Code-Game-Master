@@ -194,7 +194,10 @@ if [ -n "$HAS_HP" ]; then
     if [ -n "$HAS_BAR" ]; then
         L2="  HP ${HPC}${BAR}${RESET} ${HP_CUR}/${HP_MAX}"
     else
-        L2="  HP ${HPC}${BAR}${RESET} ${HP_CUR}"
+        # No max, so there is no proportion to draw. An empty ten-cell bar
+        # beside a healthy character still reads as an empty tank, which is
+        # the same class of assertion this fix removed from the state label.
+        L2="  HP ${HPC}${HP_CUR}${RESET}"
     fi
 fi
 
