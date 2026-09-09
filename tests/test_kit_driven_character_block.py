@@ -390,3 +390,95 @@ def test_from_canon_still_defaults_armour_class_on_dnd5e(tmp_path):
     world = _world_with_npc(tmp_path, "realms", DND5E_RULESET,
                             {"level": 2, "hp": {"current": 9, "max": 9}})
     assert IdentityOnboarding(world).from_canon("Mair")["vitals"]["ac"] == 10
+
+
+PARTY_KIT = {
+    "name": "custom",
+    "stat_schema": {"attributes": ["might"], "vitals": ["hp", "blood"]},
+    "progression": {"model": "milestone"},
+}
+
+
+def _party_world(tmp_path, slug, ruleset, pc, party_sheet):
+    """`_world` writes the PC; party members need npcs.json alongside it."""
+    from pathlib import Path
+    world = _world(tmp_path, slug, ruleset, pc)
+    (Path(world) / "campaigns" / slug / "npcs.json").write_text(json.dumps({
+        "Mair": {"description": "a weaver", "attitude": "neutral",
+                 "is_party_member": True, "character_sheet": party_sheet},
+    }), encoding="utf-8")
+    return world
+
+
+def test_show_player_omits_race_class_and_gold_a_custom_kit_never_declared(tmp_path):
+    """The base line hardcoded '?' for race and class and a Gold field for every
+    world — the same defect the CHARACTER brief was fixed for, on the surface the
+    GM reads when they run `gm-player.sh show`."""
+    from lib.player_manager import PlayerManager
+    world = _world(tmp_path, "brythonic", PARTY_KIT, {
+        "name": "Rhiannon", "level": 0, "hp": {"current": 30, "max": 30},
+        "blood": 7, "stats": {"might": 3},
+    })
+    out = PlayerManager(world).show_player("Rhiannon")
+    assert "Rhiannon" in out
+    assert "?" not in out
+    assert "Gold" not in out
+    assert "Blood: 7" in out
+
+
+def test_show_player_keeps_race_class_and_gold_when_the_sheet_has_them(tmp_path):
+    from lib.player_manager import PlayerManager
+    world = _world(tmp_path, "with-furniture", PARTY_KIT, {
+        "name": "Bram", "level": 3, "race": "Dwarf", "class": "Cleric",
+        "gold": 12, "hp": {"current": 20, "max": 20}, "stats": {"might": 3},
+    })
+    out = PlayerManager(world).show_player("Bram")
+    assert "Dwarf" in out and "Cleric" in out
+    assert "Gold: 12" in out
+
+
+def test_show_all_players_uses_the_same_identity_line(tmp_path):
+    from lib.player_manager import PlayerManager
+    world = _world(tmp_path, "all-players", PARTY_KIT, {
+        "name": "Rhiannon", "level": 0, "hp": {"current": 30, "max": 30},
+        "stats": {"might": 3},
+    })
+    line = PlayerManager(world).show_all_players()[0]
+    assert "?" not in line
+    assert "Gold" not in line
+
+
+def test_party_members_do_not_become_unknown_commoners(tmp_path):
+    """race 'Unknown' and class 'Commoner' were invented: on a world with no
+    classes every follower was reported as a Commoner, and the block indexed
+    hp['current'] directly, which raises on a scalar-hp sheet."""
+    world = _party_world(
+        tmp_path, "party-kit", PARTY_KIT,
+        {"name": "Rhiannon", "level": 0, "hp": {"current": 30, "max": 30}},
+        {"level": 2, "hp": 6, "blood": 3})
+
+    ctx = SessionManager(world).get_full_context()
+    # Scoped to the PARTY MEMBERS section: the session header renders its own
+    # unrelated "Unknown Campaign" / "Unknown" location-time boilerplate on a
+    # minimal test world with no campaign.json, which a bare `ctx`-wide
+    # assertion would trip regardless of how the party block itself renders.
+    party_section = ctx.split("--- PARTY MEMBERS ---", 1)[1].split("--- NPC VOICES", 1)[0]
+    assert "Commoner" not in party_section
+    assert "Unknown" not in party_section
+    assert "AC:" not in party_section
+    assert "Mair (Lvl 2)" in ctx
+    assert "HP: 6" in ctx
+    assert "Blood: 3" in ctx
+
+
+def test_party_members_keep_5e_fields_when_the_sheet_carries_them(tmp_path):
+    world = _party_world(
+        tmp_path, "party-5e", DND5E_RULESET,
+        {"name": "Bram", "level": 3, "hp": {"current": 20, "max": 20}},
+        {"level": 2, "race": "Human", "class": "Fighter", "ac": 16,
+         "hp": {"current": 9, "max": 9}})
+
+    ctx = SessionManager(world).get_full_context()
+    assert "Mair (Lvl 2 Human Fighter)" in ctx
+    assert "AC: 16" in ctx
+    assert "HP: 9/9" in ctx

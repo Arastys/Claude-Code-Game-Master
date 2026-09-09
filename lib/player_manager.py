@@ -175,6 +175,35 @@ class PlayerManager(EntityManager):
             return []
         return [char.get('name', 'character').lower().replace(' ', '-')]
 
+    def _identity_line(self, char: Dict, fallback_name: str = 'Unknown') -> str:
+        """'Rhiannon - Level 0 Brythonic' — name, level, then whatever identity
+        fields the sheet actually carries.
+
+        Race and class are 5e furniture and are printed only when present. The old
+        base line hardcoded '?' for both, so a world without classes advertised a
+        missing one on every `gm-player.sh show`. Mirrors the CHARACTER brief's
+        assembly in session_manager so the two surfaces cannot drift.
+        """
+        line = f"{char.get('name', fallback_name)} - Level {char.get('level', 1)}"
+        for key in ('race', 'class'):
+            if char.get(key):
+                line += f" {char[key]}"
+        return line
+
+    def _detail_segments(self, char: Dict) -> str:
+        """' (HP: 30/30, Gold: 12)' — HP when the kit declares it or the sheet
+        carries it, gold only when the sheet actually has it, and never a value
+        the declared-vitals summary is already going to print."""
+        declared = self._kit_vitals()
+        details = []
+        if 'hp' in declared or 'hp' in char:
+            current, maximum = self._read_vital(char, 'hp')
+            details.append(
+                f"HP: {current}/{maximum}" if maximum is not None else f"HP: {current}")
+        if 'gold' in char and 'gold' not in declared:
+            details.append(f"Gold: {char['gold']}")
+        return f" ({', '.join(details)})" if details else ""
+
     def show_player(self, name: str) -> Optional[str]:
         """Get formatted player summary"""
         char = self._load_character(name)
@@ -182,10 +211,7 @@ class PlayerManager(EntityManager):
             print(f"[ERROR] Character '{name}' not found")
             return None
 
-        hp_cur, hp_max = self._read_vital(char, 'hp')
-        hp_str = f"{hp_cur}/{hp_max}" if hp_max is not None else f"{hp_cur}"
-        gold = char.get('gold', 0)
-        summary = f"{char.get('name', name)} - {char.get('race', '?')} {char.get('class', '?')} Level {char.get('level', 1)} (HP: {hp_str}, Gold: {gold})"
+        summary = self._identity_line(char, name) + self._detail_segments(char)
         summary += self._vitals_summary(char)
         status = char.get('status')
         if status in ('dying', 'dead'):
@@ -200,11 +226,8 @@ class PlayerManager(EntityManager):
         char = self._load_character()
         if not char:
             return []
-        hp_cur, hp_max = self._read_vital(char, 'hp')
-        hp_str = f"{hp_cur}/{hp_max}" if hp_max is not None else f"{hp_cur}"
-        gold = char.get('gold', 0)
         return [
-            f"{char.get('name', 'Unknown')} - {char.get('race', '?')} {char.get('class', '?')} Level {char.get('level', 1)} (HP: {hp_str}, Gold: {gold})"
+            self._identity_line(char) + self._detail_segments(char)
             + self._vitals_summary(char)
         ]
 
