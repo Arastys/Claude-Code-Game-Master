@@ -32,6 +32,12 @@ DND5E_RULESET = {
     "resolution": {"model": "d20-vs-dc"},
 }
 
+SCALAR_KIT = {
+    "name": "custom",
+    "stat_schema": {"attributes": ["might"], "vitals": ["hp"]},
+    "progression": {"model": "milestone"},
+}
+
 
 def _world(tmp_path, slug, ruleset, character):
     world = tmp_path / "world-state"
@@ -316,3 +322,248 @@ def test_race_declared_as_a_trait_does_not_double_with_identity(tmp_path):
     })
     line = _character_line(world)
     assert line.count("Cimmerian") == 1
+
+
+def test_show_player_renders_race_trait_once(tmp_path):
+    """FIX 4: `show_player` must not double-print a trait that collides with the
+    identity line — the same gap test_race_declared_as_a_trait_does_not_double_
+    with_identity (above) covers for the CHARACTER brief, but `show` built its
+    identity/detail/vitals/trait segments without sharing a `rendered` set."""
+    from lib.player_manager import PlayerManager
+    world = _world(tmp_path, "twice-named-show", RACE_TRAIT_RULESET, {
+        "name": "D", "level": 1, "race": "Cimmerian",
+        "hp": {"current": 5, "max": 5},
+    })
+    out = PlayerManager(world).show_player("D")
+    assert out.count("Cimmerian") == 1
+
+
+def test_revive_survives_a_sheet_whose_hp_is_a_plain_number(tmp_path):
+    """A kit may model hp as a bare int. `revive` read char['hp'].get('max') and
+    then assigned char['hp']['current'], so on such a kit reviving raised
+    AttributeError and the character could never come back."""
+    from pathlib import Path
+    from lib.player_manager import PlayerManager
+    world = _world(tmp_path, "scalar-hp", SCALAR_KIT, {
+        "name": "Nomad", "level": 1, "hp": 0, "status": "dead",
+        "died_at": "somewhen", "stats": {"might": 3},
+    })
+    assert PlayerManager(world).revive("Nomad", reason="dragged back")["success"] is True
+    stored = json.loads(
+        (Path(world) / "campaigns" / "scalar-hp" / "character.json").read_text(
+            encoding="utf-8"))
+    assert stored["status"] == "alive"
+    assert stored["hp"] == 1          # still a plain number, not a dict
+    assert "died_at" not in stored
+
+
+def test_revive_still_clamps_against_a_dict_shaped_max(tmp_path):
+    from pathlib import Path
+    from lib.player_manager import PlayerManager
+    world = _world(tmp_path, "dict-hp", SCALAR_KIT, {
+        "name": "Nomad", "level": 1, "hp": {"current": 0, "max": 4},
+        "status": "dead", "stats": {"might": 3},
+    })
+    PlayerManager(world).revive("Nomad", hp=99)
+    stored = json.loads(
+        (Path(world) / "campaigns" / "dict-hp" / "character.json").read_text(
+            encoding="utf-8"))
+    assert stored["hp"] == {"current": 4, "max": 4}
+
+
+def _world_with_npc(tmp_path, slug, ruleset, npc_sheet):
+    """`_world` writes a PC but no npcs.json; from_canon needs one."""
+    from pathlib import Path
+    world = _world(tmp_path, slug, ruleset,
+                   {"name": "Placeholder", "level": 1, "hp": {"current": 1, "max": 1}})
+    (Path(world) / "campaigns" / slug / "npcs.json").write_text(json.dumps({
+        "Mair": {"description": "a weaver", "attitude": "neutral",
+                 "character_sheet": npc_sheet},
+    }), encoding="utf-8")
+    return world
+
+
+def test_from_canon_does_not_invent_an_armour_class(tmp_path):
+    """Lifting a canon NPC to PC gave every world an `ac`. Same defect family as
+    save_character.py's DND_SHEET_DEFAULTS, which is already kit-gated."""
+    from lib.identity_onboarding import IdentityOnboarding
+    world = _world_with_npc(tmp_path, "no-armour", SCALAR_KIT,
+                            {"level": 2, "hp": {"current": 6, "max": 6}})
+    assert "ac" not in IdentityOnboarding(world).from_canon("Mair")["vitals"]
+
+
+def test_from_canon_keeps_an_authored_armour_class_on_any_kit(tmp_path):
+    from lib.identity_onboarding import IdentityOnboarding
+    world = _world_with_npc(tmp_path, "authored-ac", SCALAR_KIT,
+                            {"level": 2, "ac": 13, "hp": {"current": 6, "max": 6}})
+    assert IdentityOnboarding(world).from_canon("Mair")["vitals"]["ac"] == 13
+
+
+def test_from_canon_still_defaults_armour_class_on_dnd5e(tmp_path):
+    from lib.identity_onboarding import IdentityOnboarding
+    world = _world_with_npc(tmp_path, "realms", DND5E_RULESET,
+                            {"level": 2, "hp": {"current": 9, "max": 9}})
+    assert IdentityOnboarding(world).from_canon("Mair")["vitals"]["ac"] == 10
+
+
+def test_from_canon_carries_declared_vitals_and_traits(tmp_path):
+    """FIX 6: `_canon_vitals` only knew `hp` and `ac`, so a canon NPC promoted to
+    PC on a kit declaring `blood`/`generation` silently dropped both."""
+    from lib.identity_onboarding import IdentityOnboarding
+    kit = {
+        "name": "custom",
+        "stat_schema": {"attributes": ["might"], "vitals": ["hp", "blood"],
+                        "traits": ["generation"]},
+        "progression": {"model": "milestone"},
+    }
+    world = _world_with_npc(tmp_path, "canon-vitals", kit,
+                            {"level": 2, "hp": {"current": 6, "max": 6},
+                             "blood": 7, "generation": 5})
+    vitals = IdentityOnboarding(world).from_canon("Mair")["vitals"]
+    assert vitals["blood"] == 7
+    assert vitals["generation"] == 5
+
+
+PARTY_KIT = {
+    "name": "custom",
+    "stat_schema": {"attributes": ["might"], "vitals": ["hp", "blood"]},
+    "progression": {"model": "milestone"},
+}
+
+
+def _party_world(tmp_path, slug, ruleset, pc, party_sheet):
+    """`_world` writes the PC; party members need npcs.json alongside it."""
+    from pathlib import Path
+    world = _world(tmp_path, slug, ruleset, pc)
+    (Path(world) / "campaigns" / slug / "npcs.json").write_text(json.dumps({
+        "Mair": {"description": "a weaver", "attitude": "neutral",
+                 "is_party_member": True, "character_sheet": party_sheet},
+    }), encoding="utf-8")
+    return world
+
+
+def test_show_player_omits_race_class_and_gold_a_custom_kit_never_declared(tmp_path):
+    """The base line hardcoded '?' for race and class and a Gold field for every
+    world — the same defect the CHARACTER brief was fixed for, on the surface the
+    GM reads when they run `gm-player.sh show`."""
+    from lib.player_manager import PlayerManager
+    world = _world(tmp_path, "brythonic", PARTY_KIT, {
+        "name": "Rhiannon", "level": 0, "hp": {"current": 30, "max": 30},
+        "blood": 7, "stats": {"might": 3},
+    })
+    out = PlayerManager(world).show_player("Rhiannon")
+    assert "Rhiannon" in out
+    assert "?" not in out
+    assert "Gold" not in out
+    assert "Blood: 7" in out
+
+
+def test_show_player_keeps_race_class_and_gold_when_the_sheet_has_them(tmp_path):
+    from lib.player_manager import PlayerManager
+    world = _world(tmp_path, "with-furniture", PARTY_KIT, {
+        "name": "Bram", "level": 3, "race": "Dwarf", "class": "Cleric",
+        "gold": 12, "hp": {"current": 20, "max": 20}, "stats": {"might": 3},
+    })
+    out = PlayerManager(world).show_player("Bram")
+    assert "Dwarf" in out and "Cleric" in out
+    assert "Gold: 12" in out
+
+
+def test_show_all_players_uses_the_same_identity_line(tmp_path):
+    from lib.player_manager import PlayerManager
+    world = _world(tmp_path, "all-players", PARTY_KIT, {
+        "name": "Rhiannon", "level": 0, "hp": {"current": 30, "max": 30},
+        "stats": {"might": 3},
+    })
+    line = PlayerManager(world).show_all_players()[0]
+    assert "?" not in line
+    assert "Gold" not in line
+
+
+def test_party_members_do_not_become_unknown_commoners(tmp_path):
+    """race 'Unknown' and class 'Commoner' were invented: on a world with no
+    classes every follower was reported as a Commoner, and the block indexed
+    hp['current'] directly, which raises on a scalar-hp sheet."""
+    world = _party_world(
+        tmp_path, "party-kit", PARTY_KIT,
+        {"name": "Rhiannon", "level": 0, "hp": {"current": 30, "max": 30}},
+        {"level": 2, "hp": 6, "blood": 3})
+
+    ctx = SessionManager(world).get_full_context()
+    # Scoped to the PARTY MEMBERS section: the session header renders its own
+    # unrelated "Unknown Campaign" / "Unknown" location-time boilerplate on a
+    # minimal test world with no campaign.json, which a bare `ctx`-wide
+    # assertion would trip regardless of how the party block itself renders.
+    party_section = ctx.split("--- PARTY MEMBERS ---", 1)[1].split("--- NPC VOICES", 1)[0]
+    assert "Commoner" not in party_section
+    assert "Unknown" not in party_section
+    assert "AC:" not in party_section
+    assert "Mair (Lvl 2)" in ctx
+    assert "HP: 6" in ctx
+    assert "Blood: 3" in ctx
+
+
+def test_party_members_keep_5e_fields_when_the_sheet_carries_them(tmp_path):
+    world = _party_world(
+        tmp_path, "party-5e", DND5E_RULESET,
+        {"name": "Bram", "level": 3, "hp": {"current": 20, "max": 20}},
+        {"level": 2, "race": "Human", "class": "Fighter", "ac": 16,
+         "hp": {"current": 9, "max": 9}})
+
+    ctx = SessionManager(world).get_full_context()
+    assert "Mair (Lvl 2 Human Fighter)" in ctx
+    assert "AC: 16" in ctx
+    assert "HP: 9/9" in ctx
+
+
+def test_party_members_render_declared_traits(tmp_path):
+    """The CHARACTER block renders kit traits; the party block must agree. A kit
+    declaring `generation` showed it for the PC and hid it from a follower whose
+    sheet carried the very same field."""
+    kit = {
+        "name": "custom",
+        "stat_schema": {"attributes": ["might"], "vitals": ["hp"],
+                        "traits": ["generation"]},
+        "progression": {"model": "milestone"},
+    }
+    world = _party_world(
+        tmp_path, "traits-party", kit,
+        {"name": "Rhiannon", "level": 0, "hp": {"current": 30, "max": 30},
+         "generation": 5},
+        {"level": 2, "hp": 6, "generation": 6})
+    ctx = SessionManager(world).get_full_context()
+    party = ctx.split("--- PARTY MEMBERS ---", 1)[1].split("--- NPC VOICES", 1)[0]
+    assert "Generation: 6" in party
+
+
+def test_show_player_renders_declared_traits(tmp_path):
+    """Same gap from the other end: `gm-player.sh show` must not report a
+    different set of facts about the character than the CHARACTER brief does."""
+    from lib.player_manager import PlayerManager
+    kit = {
+        "name": "custom",
+        "stat_schema": {"attributes": ["might"], "vitals": ["hp", "blood"],
+                        "traits": ["generation"]},
+        "progression": {"model": "milestone"},
+    }
+    world = _world(tmp_path, "traits-show", kit, {
+        "name": "Rhiannon", "level": 0, "hp": {"current": 30, "max": 30},
+        "blood": 7, "generation": 5,
+    })
+    out = PlayerManager(world).show_player("Rhiannon")
+    assert "Blood: 7" in out
+    assert "Generation: 5" in out
+
+
+def test_show_player_kit_declaring_no_traits_is_unaffected(tmp_path):
+    """Named distinctly from the existing CHARACTER-block-level
+    test_a_kit_declaring_no_traits_is_unaffected (line 163) — the Part B plan
+    proposed the same name for a show_player-level test, which would have
+    silently shadowed that earlier test rather than adding coverage."""
+    from lib.player_manager import PlayerManager
+    world = _world(tmp_path, "no-traits", PARTY_KIT, {
+        "name": "Rhiannon", "level": 0, "hp": {"current": 30, "max": 30},
+        "blood": 7,
+    })
+    out = PlayerManager(world).show_player("Rhiannon")
+    assert out.rstrip().endswith("Blood: 7")

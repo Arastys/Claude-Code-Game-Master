@@ -14,6 +14,12 @@ input=$(cat)  # Claude Code JSON payload on stdin (unused; we read state files)
 # Anchor to repo root via this script's location, not cwd.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# Same redirection every other tool honours (tools/common.sh): tests point this
+# at a fixture tree so they never read or write the player's live campaign. This
+# script does not source common.sh — require_active_campaign would exit non-zero
+# and Claude Code would show nothing at all.
+WORLD_BASE="${GM_WORLD_STATE_BASE:-$ROOT/world-state}"
+
 # 256-color palette (kept light: docs warn multi-line + heavy ANSI can glitch)
 GREEN=$'\033[38;5;42m'
 AMBER=$'\033[38;5;214m'
@@ -47,7 +53,7 @@ divider() {
     printf '%s%s%s%s%s%s%s\n' "$rule" "$left" "$orn" "$mid" "$rule" "$right" "$RESET"
 }
 
-ACTIVE_FILE="$ROOT/world-state/active-campaign.txt"
+ACTIVE_FILE="$WORLD_BASE/active-campaign.txt"
 if [ ! -f "$ACTIVE_FILE" ] || [ ! -s "$ACTIVE_FILE" ]; then
     divider
     printf '%s⚔ %sGM%s  %sno campaign yet%s  %s  %s%s/gm%s %sto begin — import a book, build a world, or jump into a one-shot%s\n' \
@@ -57,7 +63,7 @@ if [ ! -f "$ACTIVE_FILE" ] || [ ! -s "$ACTIVE_FILE" ]; then
 fi
 ACTIVE=$(tr -d '[:space:]' < "$ACTIVE_FILE")
 
-CAMP="$ROOT/world-state/campaigns/$ACTIVE"
+CAMP="$WORLD_BASE/campaigns/$ACTIVE"
 CHAR="$CAMP/character.json"
 OVER="$CAMP/campaign-overview.json"
 
@@ -70,21 +76,61 @@ if [ ! -f "$CHAR" ]; then
 fi
 
 # --- Character fields -------------------------------------------------------
-IFS=$'\t' read -r NAME RACE CLASS LEVEL AC GP HP_CUR HP_MAX XP_CUR XP_NEXT LOC < <(
-    jq -r '
-      [ (.name // .identity.name // "?"),
-        (.race // .identity.race // "?"),
-        (.class // .identity.class // "?"),
-        (.level // .progression.level // 1),
-        (.ac // .vitals.ac // "?"),
-        (.gold // .inventory.gold // 0),
-        (.hp.current // .vitals.hp.current // .hp // 0),
-        (.hp.max // .vitals.hp.max // .hp // 0),
-        (.xp.current // .progression.xp.current // .xp // 0),
-        (.xp.next_level // .progression.xp.next_level // 0),
-        (.current_location // .details.current_location // "?")
-      ] | @tsv' "$CHAR"
-)
+# The kit decides what this character HAS. Absent fields are omitted rather than
+# rendered as "?" or an invented 0 — a world without coin has no gold line, and a
+# world without classes advertises no missing class.
+RULES="$CAMP/ruleset.json"
+[ -f "$RULES" ] || RULES=/dev/null
+
+# Row fields are read with IFS=$'\x1f' (ASCII Unit Separator), not a literal
+# tab, and CR is stripped first. Two platform quirks combine badly otherwise:
+# (1) tab is one of bash's "blank" IFS characters, so `read` collapses runs of
+# them and silently drops empty fields — exactly the fields this design needs
+# to stay empty (an absent stat must read as "", not disappear and shift every
+# field after it); (2) this platform's jq writes CRLF, so an unstripped \r
+# lands inside the last field (EXTRA). Neither is the --slurpfile risk the
+# plan called out; both are verified on this platform, not assumed.
+IFS=$'\x1f' read -r NAME RACE CLASS LEVEL AC GP HP_CUR HP_MAX XP_CUR XP_NEXT LOC EXTRA HAS_HP < <(
+    jq -rn --slurpfile c "$CHAR" --slurpfile k "$RULES" '
+      # Named to_label, not label: jq reserves "label" for its label/break
+      # control-flow syntax, so `def label:` is a compile error.
+      def to_label: gsub("_"; " ") | split(" ")
+                 | map((.[0:1] | ascii_upcase) + (.[1:] | ascii_downcase))
+                 | join(" ");
+      def shown($v): if ($v | type) == "object"
+                     then (($v.current // 0) | tostring)
+                          + (if $v.max != null then "/" + ($v.max | tostring) else "" end)
+                     else ($v | tostring) end;
+      ($c[0] // {}) as $ch
+      | ($k[0] // {}) as $kit
+      | ($ch.hp // $ch.vitals.hp) as $hp
+      | ((["race","class"] | map(select(($ch[.] // "") != "")))
+         + (if ($ch.ac // $ch.vitals.ac) != null then ["ac"] else [] end)
+         + (if ($ch.gold // $ch.inventory.gold) != null then ["gold"] else [] end)
+         + ["xp"]) as $used
+      | ((($kit.stat_schema.vitals // ["hp"]) - ["hp"]) - $used) as $vitals
+      | (($kit.stat_schema.traits // []) - $used) as $traits
+      | (($hp != null) or ((($kit.stat_schema.vitals // ["hp"]) | index("hp")) != null)) as $hashp
+      | [ ($ch.name  // $ch.identity.name  // "")
+        , ($ch.race  // $ch.identity.race  // "")
+        , ($ch.class // $ch.identity.class // "")
+        , ($ch.level // $ch.progression.level // 1)
+        , ($ch.ac    // $ch.vitals.ac // "")
+        , (if ($ch.gold // $ch.inventory.gold) != null
+             then ($ch.gold // $ch.inventory.gold) | tostring else "" end)
+        , (if ($hp | type) == "object" then ($hp.current // 0) else ($hp // 0) end)
+        , (if ($hp | type) == "object" then ($hp.max // 0) else 0 end)
+        , (if ($ch.xp | type) == "object" then (($ch.xp.current // "") | tostring)
+           elif ($ch.xp | type) == "number" then ($ch.xp | tostring)
+           else (($ch.progression.xp.current // "") | tostring) end)
+        , (if ($ch.xp | type) == "object" then (($ch.xp.next_level // "") | tostring)
+           else (($ch.progression.xp.next_level // "") | tostring) end)
+        , ($ch.current_location // $ch.details.current_location // "")
+        , ( [ ($vitals[] | select($ch[.] != null) | (. | to_label) + " " + shown($ch[.]))
+            , ($traits[] | select($ch[.] != null) | (. | to_label) + " " + ($ch[.] | tostring))
+            ] | join("") )
+        , (if $hashp then "1" else "" end)
+        ] | @tsv' | tr -d '\r' | tr '\t' '\037')
 
 # Conditions array -> status label; fall back to HP-derived state.
 CONDS=$(jq -r '(.conditions // []) | map(ascii_downcase) | join(", ")' "$CHAR" 2>/dev/null)
@@ -92,8 +138,9 @@ CONDS=$(jq -r '(.conditions // []) | map(ascii_downcase) | join(", ")' "$CHAR" 2
 # --- Overview fields (location/time/date) -----------------------------------
 DATE="" ; TOD="" ; OLOC=""
 if [ -f "$OVER" ]; then
-    IFS=$'\t' read -r DATE TOD OLOC < <(
-        jq -r '[ (.current_date // ""), (.time_of_day // ""), (.player_position.current_location // "") ] | @tsv' "$OVER"
+    IFS=$'\x1f' read -r DATE TOD OLOC < <(
+        jq -r '[ (.current_date // ""), (.time_of_day // ""), (.player_position.current_location // "") ] | @tsv' "$OVER" \
+          | tr -d '\r' | tr '\t' '\037'
     )
 fi
 # Prefer overview's live location if present.
@@ -101,21 +148,26 @@ fi
 
 # --- HP bar -----------------------------------------------------------------
 BAR_W=10
-if [ "$HP_MAX" -gt 0 ] 2>/dev/null; then
+HAS_BAR=""
+if [ -n "$HAS_HP" ] && [ "$HP_MAX" -gt 0 ] 2>/dev/null; then
     PCT=$(( HP_CUR * 100 / HP_MAX ))
     FILLED=$(( HP_CUR * BAR_W / HP_MAX ))
+    HAS_BAR=1
 else
-    PCT=0 ; FILLED=0
+    # No proportion to show: a plain-number track, or a kit with no hp at all.
+    # PCT=-1 means "unknown", which must read as calm — the old code left PCT at
+    # 0 here, so a character at full health on a scalar-hp kit rendered a bold
+    # red empty bar labelled Critical, permanently.
+    PCT=-1 ; FILLED=0
 fi
 [ "$FILLED" -gt "$BAR_W" ] && FILLED=$BAR_W
 [ "$FILLED" -lt 0 ] && FILLED=0
 EMPTY=$(( BAR_W - FILLED ))
 
-# HP state drives the bar color AND the frame: calm when healthy, amber when
-# wounded, a bold red glow when critical.
-if   [ "$PCT" -ge 50 ]; then HPC="$GREEN"; STATE="Normal";   RULEC="$FAINT";        ORNC="$TEAL";          STATEC="$DIM"
-elif [ "$PCT" -ge 25 ]; then HPC="$AMBER"; STATE="Wounded";  RULEC="$AMBER";        ORNC="$AMBER";         STATEC="$AMBER"
-else                         HPC="$RED";   STATE="Critical"; RULEC="${BOLD}${RED}"; ORNC="${BOLD}${RED}";  STATEC="${BOLD}${RED}"
+if   [ "$PCT" -lt 0 ];  then HPC="$GREEN"; STATE="Normal";   RULEC="$FAINT";        ORNC="$TEAL";         STATEC="$DIM"
+elif [ "$PCT" -ge 50 ]; then HPC="$GREEN"; STATE="Normal";   RULEC="$FAINT";        ORNC="$TEAL";         STATEC="$DIM"
+elif [ "$PCT" -ge 25 ]; then HPC="$AMBER"; STATE="Wounded";  RULEC="$AMBER";        ORNC="$AMBER";        STATEC="$AMBER"
+else                         HPC="$RED";   STATE="Critical"; RULEC="${BOLD}${RED}"; ORNC="${BOLD}${RED}"; STATEC="${BOLD}${RED}"
 fi
 # A named condition (poisoned, etc.) overrides the label but keeps the HP color.
 [ -n "$CONDS" ] && { STATE="$CONDS"; [ "$PCT" -ge 50 ] && STATEC="$AMBER"; }
@@ -127,8 +179,57 @@ BAR=""
 # --- Render (3 lines) -------------------------------------------------------
 # Build each line as a string, then emit. Clearer than one packed printf.
 
-L1="${TEAL}⚔ ${BOLD}${NAME}${RESET}  ${DIM}Lv${LEVEL} ${RACE} ${CLASS}${RESET}  ${SEP}  ${AMBER}${LOC}${RESET}"
-L2="  HP ${HPC}${BAR}${RESET} ${HP_CUR}/${HP_MAX} ${SEPV} ${DIM}AC${RESET} ${AC} ${SEPV} ${GOLD}${GP}gp${RESET} ${SEPV} ${DIM}XP${RESET} ${XP_CUR}/${XP_NEXT} ${SEPV} ${STATEC}${STATE}${RESET}"
+IDENT="Lv${LEVEL}"
+[ -n "$RACE" ]  && IDENT="$IDENT $RACE"
+[ -n "$CLASS" ] && IDENT="$IDENT $CLASS"
+L1="${TEAL}⚔ ${BOLD}${NAME}${RESET}  ${DIM}${IDENT}${RESET}"
+[ -n "$LOC" ] && L1="$L1  ${SEP}  ${AMBER}${LOC}${RESET}"
+
+# HP only when the kit declares it or the sheet already carries it (HAS_HP,
+# computed by jq). A kit whose declared vitals omit hp entirely (vitals:
+# ["vigor"]) gets no HP segment at all — the old comment here ("every kit has
+# a body") was itself the fabricated-concept bug this fix removes.
+L2=""
+if [ -n "$HAS_HP" ]; then
+    if [ -n "$HAS_BAR" ]; then
+        L2="  HP ${HPC}${BAR}${RESET} ${HP_CUR}/${HP_MAX}"
+    else
+        # No max, so there is no proportion to draw. An empty ten-cell bar
+        # beside a healthy character still reads as an empty tank, which is
+        # the same class of assertion this fix removed from the state label.
+        L2="  HP ${HPC}${HP_CUR}${RESET}"
+    fi
+fi
+
+# Append one vitals-line segment, adding the separator only when L2 already
+# holds one — so the leading segment (HP, or the first extra/AC/GP/XP/state on
+# a kit with no hp at all) never gets an orphaned separator in front of it.
+append_seg() {
+    if [ -n "$L2" ]; then
+        L2="$L2 ${SEPV} $1"
+    else
+        L2="  $1"
+    fi
+}
+
+# Kit-declared vitals and traits, already labelled by jq, \x01-separated. Split
+# on the LAST space (not the first), so a multi-word label like "Blood Debt 3"
+# dims the whole label instead of just its first word. set -f for the loop: it
+# word-splits on \x01 unquoted, so a label/value containing *, ? or [ must not
+# undergo pathname expansion.
+if [ -n "$EXTRA" ]; then
+    OLDIFS=$IFS; IFS=$'\001'
+    set -f
+    for seg in $EXTRA; do
+        [ -n "$seg" ] && append_seg "${DIM}${seg% *}${RESET} ${seg##* }"
+    done
+    set +f
+    IFS=$OLDIFS
+fi
+[ -n "$AC" ] && append_seg "${DIM}AC${RESET} ${AC}"
+[ -n "$GP" ] && append_seg "${GOLD}${GP}gp${RESET}"
+[ -n "$XP_CUR" ] && [ -n "$XP_NEXT" ] && append_seg "${DIM}XP${RESET} ${XP_CUR}/${XP_NEXT}"
+append_seg "${STATEC}${STATE}${RESET}"
 
 # Top rule — frames the HUD off from the conversation above.
 divider "$RULEC" "$ORNC"

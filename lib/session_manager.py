@@ -901,8 +901,7 @@ class SessionManager(EntityManager):
             # invented `Gold: 0` on worlds with no coinage, while hiding every kit
             # vital beyond hp. gm-player.sh show's vitals SUFFIX (_vitals_summary) has
             # been kit-driven for some time; this block kept a divergent hardcoded
-            # copy of it — show's base line (name/race/class/HP/gold) is still a
-            # hardcoded 5e f-string, untouched by this fix.
+            # copy of it.
             from player_manager import PlayerManager
 
             declared = kit.vitals() if kit is not None else ["hp"]
@@ -971,18 +970,64 @@ class SessionManager(EntityManager):
             party_items = list(party.items())
             max_party = len(party_items) if full else 8
             shown_party = party_items[:max_party]
+            from player_manager import PlayerManager
+            # Reuse the `kit` already resolved (with its try/except) above for
+            # the CHARACTER block, rather than constructing a second, unguarded
+            # WorldKit here — a WorldKit that fails to construct must skip the
+            # KIT block, not take the whole context brief down with it.
+            declared = kit.vitals() if kit is not None else ["hp"]
             for npc_name, npc_data in shown_party:
                 sheet = npc_data.get('character_sheet', {})
-                hp = sheet.get('hp', {'current': 10, 'max': 10})
-                ac = sheet.get('ac', 10)
-                level = sheet.get('level', 1)
-                race = sheet.get('race', 'Unknown')
-                cls = sheet.get('class', 'Commoner')
+                # Identity: level always, race and class only when the sheet
+                # carries them. 'Unknown' and 'Commoner' were invented — on a world
+                # with no classes every follower was reported as a Commoner.
+                rendered = set()
+                ident = f"Lvl {sheet.get('level', 1)}"
+                for key in ('race', 'class'):
+                    if sheet.get(key):
+                        ident += f" {sheet[key]}"
+                        rendered.add(key)
+
+                # Declared vitals, read through the shared helper so a kit that
+                # models a track as a plain number does not crash the brief. hp is
+                # special-cased to the literal "HP" and everything else goes
+                # through stat_label — the same split the CHARACTER block makes at
+                # session_manager.py:924-935, because stat_label("hp") is "Hp".
+                segments = []
+                if 'hp' in declared or 'hp' in sheet:
+                    current, maximum = PlayerManager._read_vital(sheet, 'hp')
+                    segments.append(f"HP: {current}/{maximum}" if maximum is not None
+                                    else f"HP: {current}")
+                    rendered.add('hp')
+                for vital in declared:
+                    if vital in rendered or vital not in sheet:
+                        continue
+                    current, maximum = PlayerManager._read_vital(sheet, vital)
+                    label = stat_label(vital)
+                    segments.append(f"{label}: {current}/{maximum}" if maximum is not None
+                                    else f"{label}: {current}")
+                    rendered.add(vital)
+
+                # Declared traits, mirroring the CHARACTER block at :938-942. A
+                # party member carrying the same kit-declared field as the PC must
+                # not be the only one it is hidden from.
+                for trait in (kit.traits() if kit is not None else []):
+                    if trait in rendered or trait not in sheet:
+                        continue
+                    segments.append(f"{stat_label(trait)}: {sheet[trait]}")
+                    rendered.add(trait)
+
+                if 'ac' in sheet and 'ac' not in rendered:
+                    segments.append(f"AC: {sheet['ac']}")
+
                 conditions = sheet.get('conditions', [])
                 cond_str = f" [{', '.join(conditions)}]" if conditions else ""
                 desc = self._truncate(npc_data.get('description', ''), 180, full)
 
-                lines.append(f"{npc_name} (Lvl {level} {race} {cls}) HP: {hp['current']}/{hp['max']} AC: {ac}{cond_str}")
+                head = f"{npc_name} ({ident})"
+                if segments:
+                    head += " " + " ".join(segments)
+                lines.append(f"{head}{cond_str}")
                 if desc:
                     lines.append(f"  {desc}")
 

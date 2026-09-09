@@ -47,6 +47,25 @@ class IdentityOnboarding(EntityManager):
         inv["items"] = list(items)
         return inv
 
+    def _canon_vitals(self, sheet: Dict[str, Any]) -> Dict[str, Any]:
+        """hp always; every other declared vital the sheet carries; ac only when
+        the sheet has one, or on a 5e kit.
+
+        The old version knew exactly two names, so promoting a canon NPC on a kit
+        declaring `blood` silently dropped it. Declared traits ride along too —
+        lifting a character must not quietly strip what the world says they are.
+        """
+        vitals = {"hp": copy.deepcopy(sheet.get("hp", _default_vitals()["hp"]))}
+        kit = WorldKit(self._wsd)
+        for name in list(kit.vitals()) + list(kit.traits()):
+            if name != "hp" and name in sheet:
+                vitals[name] = copy.deepcopy(sheet[name])
+        if "ac" in sheet:
+            vitals["ac"] = sheet["ac"]
+        elif self._is_dnd5e:
+            vitals["ac"] = 10
+        return vitals
+
     def from_canon(self, npc_name: str) -> Optional[Dict[str, Any]]:
         """Lift a canon character from npcs.json (stats from a sheet if present, voice from context).
 
@@ -66,7 +85,7 @@ class IdentityOnboarding(EntityManager):
             # (died_at / cause) can never ride along into the new PC.
             "status": "alive",
             "identity": {"name": npc_name, "race": sheet.get("race", ""), "class": sheet.get("class", "")},
-            "vitals": {"hp": copy.deepcopy(sheet.get("hp", _default_vitals()["hp"])), "ac": sheet.get("ac", 10)},
+            "vitals": self._canon_vitals(sheet),
             "attributes": dict(sheet.get("stats", {})),
             "progression": {"level": sheet.get("level", 1)},
             "inventory": self._inventory(sheet.get("equipment", [])),
