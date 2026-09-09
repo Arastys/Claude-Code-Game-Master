@@ -167,21 +167,56 @@ def test_dm_json_env_yields_exactly_one_envelope_from_each_of_the_five_tools(tmp
         assert payload["ok"] is True, (tool, payload)
 
 
+def test_campaign_wrapper_path_ignores_ambient_dm_json(tmp_path):
+    """The guard that actually matters: `bash tools/gm-campaign.sh path` is how
+    every real caller reaches this verb (gm-search.sh, gm-session.sh, gm-npc.sh
+    and gm-playpack.sh all capture it in $( ) as a bare string to build further
+    paths from). The wrapper used to fold an ambient DM_JSON=1 into the SAME
+    JSON_FLAG variable it forwards to every action, so by the time Python saw
+    argv, an ambient switch was indistinguishable from a caller who actually
+    typed --json — `CAMPAIGN_DIR=$(DM_JSON=1 gm-campaign.sh path)` produced an
+    envelope, and every path built from it (`$CAMPAIGN_DIR/npcs.json`) read
+    "{/npcs.json". The wrapper now keeps a separate EXPLICIT_JSON captured
+    before the ambient fold, and forwards only that for `path`/`active`."""
+    world, _ = _world(tmp_path)
+    proc = _run_dm_json(world, "gm-campaign.sh", "path")
+    assert proc.returncode == 0, proc.stderr
+    out = proc.stdout.strip()
+    assert not out.startswith("{"), out
+    # Prove it is a genuinely usable path, the way a real caller uses it.
+    assert (Path(out) / "ruleset.json").exists(), out
+
+
+def test_campaign_wrapper_active_ignores_ambient_dm_json(tmp_path):
+    world, _ = _world(tmp_path)
+    proc = _run_dm_json(world, "gm-campaign.sh", "active")
+    assert proc.returncode == 0, proc.stderr
+    out = proc.stdout.strip()
+    assert not out.startswith("{"), out
+    assert out == "probe"
+
+
+def test_campaign_wrapper_path_with_explicit_json_flag_still_envelopes(tmp_path):
+    """The explicit flag is exactly what still asks for the envelope through
+    the wrapper, with or without DM_JSON in the environment."""
+    world, _ = _world(tmp_path)
+    data = _envelope(_run(world, "gm-campaign.sh", "path", "--json"))
+    assert data.endswith("probe")
+
+
+def test_campaign_wrapper_active_with_explicit_json_flag_still_envelopes(tmp_path):
+    world, _ = _world(tmp_path)
+    data = _envelope(_run(world, "gm-campaign.sh", "active", "--json"))
+    assert data == "probe"
+
+
 def test_campaign_manager_path_ignores_ambient_dm_json(tmp_path):
-    """`lib/campaign_manager.py`'s `path`/`active`/`slugify`/`resolve` are
-    plumbing consumed as a BARE STRING inside `$( )` at roughly twenty call
-    sites (tools/gm-search.sh, gm-session.sh, gm-npc.sh, gm-playpack.sh,
-    gm-extract.sh, plus several .claude/commands and world-builder). An ambient
-    DM_JSON=1 must not turn their output into an envelope — only a literal
-    --json on the invocation itself counts — or `CAMPAIGN_DIR=$(... path)`
-    silently becomes garbage. This drives the manager directly (the layer the
-    fix touches; test_slug_unify.py uses the same direct-invocation pattern for
-    `slugify`), because tools/gm-campaign.sh's own pre-existing
-    `[ "${DM_JSON:-}" = "1" ] && JSON_FLAG="--json"` fold (added for its
-    genuinely-structured verbs like `list`/`info`) still converts an ambient
-    DM_JSON=1 into a literal --json before invoking Python for every action —
-    including `path` and `active` — so it cannot be told apart there from an
-    explicit flag. That wrapper-level gap is out of this fix's scope."""
+    """Same guarantee one layer down, driving `lib/campaign_manager.py`
+    directly (the layer the underlying fix lives in; test_slug_unify.py uses
+    the same direct-invocation pattern for `slugify`). `path`/`active`/
+    `slugify`/`resolve` are all plumbing consumed as a bare string somewhere —
+    `resolve` by gm-extract.sh directly, bypassing gm-campaign.sh entirely — so
+    this must hold independently of whichever wrapper (if any) sits in front."""
     world, _ = _world(tmp_path)
     proc = subprocess.run(
         [sys.executable, str(REPO_ROOT / "lib" / "campaign_manager.py"), "path"],
