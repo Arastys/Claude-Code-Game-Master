@@ -154,3 +154,34 @@ def test_location_connections_on_a_missing_name_still_parses(tmp_path):
     proc = _run(world, "gm-location.sh", "connections", "Nowhere At All", "--json")
     assert "[ERROR]" not in proc.stdout, proc.stdout
     assert _envelope(proc) == []
+
+
+def test_the_wrapper_contract_names_enforcement_files_that_exist():
+    """The convention doc claims four enforcement test files; none exists.
+
+    Two places hide a filename here, and a naive path regex sees only one of them:
+    the OKF frontmatter carries `- { resource: /tests/test_json_wrappers_player.py }`,
+    and the prose says `tests/test_json_wrappers_*.py (player, npc, session,
+    consequence)` — where three of the four names are bare words inside a
+    parenthesis, not paths. Check both, or this test passes while three false
+    claims stand.
+    """
+    import re
+    doc = (REPO_ROOT / "docs" / "conventions" / "tool-wrapper-contract.md").read_text(
+        encoding="utf-8")
+    tests_dir = REPO_ROOT / "tests"
+
+    def _missing(stem):
+        return not (tests_dir / f"test_json_wrappers_{stem}.py").exists()
+
+    missing = [f"test_json_wrappers_{n}.py"
+               for n in re.findall(r"tests/test_json_wrappers_(\w+)\.py", doc)
+               if _missing(n)]
+
+    glob_list = re.search(r"tests/test_json_wrappers_\*\.py`?\s*\(([^)]*)\)", doc)
+    if glob_list:
+        missing += [f"test_json_wrappers_{w.strip()}.py (from the glob's own list)"
+                    for w in re.split(r",\s*", glob_list.group(1))
+                    if w.strip() and _missing(w.strip())]
+
+    assert not missing, "doc names enforcement files that do not exist: " + ", ".join(missing)
