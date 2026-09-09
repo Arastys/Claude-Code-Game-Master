@@ -5,6 +5,30 @@
 # Source common utilities
 source "$(dirname "$0")/common.sh"
 
+# Pull --json out of the positional arguments before the case dispatches: several
+# branches forward only "$1"/"$2", so a trailing flag would be silently dropped
+# and the caller would get human text having asked for an envelope.
+split_json_flag "$@"
+set -- ${GM_ARGS+"${GM_ARGS[@]}"}
+
+# The explicit flag and the ambient switch mean different things to the scalar
+# verbs below. `path` and `active` are plumbing — gm-search.sh, gm-session.sh,
+# gm-npc.sh and gm-playpack.sh all capture them in $( ) as bare strings. A
+# caller who TYPED --json wants an envelope and will parse it; DM_JSON=1 set
+# once in .env cannot know a caller is capturing a bare path, and enveloping it
+# silently breaks every path built from it. Same reasoning that keeps
+# time_manager.py's `ticks` bare. Capture the explicit flag BEFORE the ambient
+# fold below overwrites JSON_FLAG, and forward EXPLICIT_JSON (never JSON_FLAG)
+# for exactly those two verbs.
+EXPLICIT_JSON="$JSON_FLAG"
+
+# DM_JSON=1 is the documented global envelope switch (lib/cli_output.py), and the
+# manager honours it with no flag in sight — so fold it into JSON_FLAG here, or the
+# human-only guards below would print their text ahead of an envelope. Every
+# verb OTHER than path/active is genuine structured output and forwards this
+# folded variable, honouring the ambient switch same as before.
+[ "${DM_JSON:-}" = "1" ] && JSON_FLAG="--json"
+
 ACTION=$1
 shift
 
@@ -34,7 +58,7 @@ show_usage() {
 
 case "$ACTION" in
     "list")
-        $PYTHON_CMD "$LIB_DIR/campaign_manager.py" list
+        $PYTHON_CMD "$LIB_DIR/campaign_manager.py" list $JSON_FLAG
         ;;
 
     "switch")
@@ -42,10 +66,12 @@ case "$ACTION" in
             echo "Usage: gm-campaign.sh switch <campaign_name>"
             echo ""
             echo "Available campaigns:"
+            # No $JSON_FLAG here: this listing is decoration inside a usage error
+            # that exits 1 — the flag is refused on this path, not absorbed.
             $PYTHON_CMD "$LIB_DIR/campaign_manager.py" list
             exit 1
         fi
-        $PYTHON_CMD "$LIB_DIR/campaign_manager.py" switch "$1"
+        $PYTHON_CMD "$LIB_DIR/campaign_manager.py" switch "$1" $JSON_FLAG
         ;;
 
     "create")
@@ -57,7 +83,7 @@ case "$ACTION" in
         fi
         NAME="$1"
         shift
-        $PYTHON_CMD "$LIB_DIR/campaign_manager.py" create "$NAME" "$@"
+        $PYTHON_CMD "$LIB_DIR/campaign_manager.py" create "$NAME" "$@" $JSON_FLAG
         ;;
 
     "delete")
@@ -79,10 +105,14 @@ case "$ACTION" in
             esac
         done
 
-        # Show info about what will be deleted
-        echo "Campaign to delete: $CAMPAIGN_NAME"
-        $PYTHON_CMD "$LIB_DIR/campaign_manager.py" info "$CAMPAIGN_NAME"
-        echo ""
+        # Show info about what will be deleted. The preview is for a human at the
+        # confirmation prompt below; in --json mode it would print a second envelope
+        # ahead of the delete's own, so the whole preview is skipped.
+        if [ -z "$JSON_FLAG" ]; then
+            echo "Campaign to delete: $CAMPAIGN_NAME"
+            $PYTHON_CMD "$LIB_DIR/campaign_manager.py" info "$CAMPAIGN_NAME"
+            echo ""
+        fi
 
         CONFIRM="yes"
         if [ "$ASSUME_YES" -eq 0 ]; then
@@ -94,7 +124,7 @@ case "$ACTION" in
         fi
 
         if [ "$CONFIRM" = "yes" ]; then
-            $PYTHON_CMD "$LIB_DIR/campaign_manager.py" delete "$CAMPAIGN_NAME" --confirm
+            $PYTHON_CMD "$LIB_DIR/campaign_manager.py" delete "$CAMPAIGN_NAME" --confirm $JSON_FLAG
         else
             echo "Deletion cancelled."
         fi
@@ -102,21 +132,25 @@ case "$ACTION" in
 
     "info")
         if [ -z "$1" ]; then
-            $PYTHON_CMD "$LIB_DIR/campaign_manager.py" info
+            $PYTHON_CMD "$LIB_DIR/campaign_manager.py" info $JSON_FLAG
         else
-            $PYTHON_CMD "$LIB_DIR/campaign_manager.py" info "$1"
+            $PYTHON_CMD "$LIB_DIR/campaign_manager.py" info "$1" $JSON_FLAG
         fi
         ;;
 
     "active")
-        $PYTHON_CMD "$LIB_DIR/campaign_manager.py" active
+        # Bare-string plumbing verb: forward the explicit flag only, never the
+        # ambient-folded one (see EXPLICIT_JSON above).
+        $PYTHON_CMD "$LIB_DIR/campaign_manager.py" active $EXPLICIT_JSON
         ;;
 
     "path")
+        # Bare-string plumbing verb: forward the explicit flag only, never the
+        # ambient-folded one (see EXPLICIT_JSON above).
         if [ -z "$1" ]; then
-            $PYTHON_CMD "$LIB_DIR/campaign_manager.py" path
+            $PYTHON_CMD "$LIB_DIR/campaign_manager.py" path $EXPLICIT_JSON
         else
-            $PYTHON_CMD "$LIB_DIR/campaign_manager.py" path "$1"
+            $PYTHON_CMD "$LIB_DIR/campaign_manager.py" path "$1" $EXPLICIT_JSON
         fi
         ;;
 

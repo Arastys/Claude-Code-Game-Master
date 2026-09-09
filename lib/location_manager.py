@@ -231,7 +231,13 @@ class LocationManager(EntityManager):
 def main():
     """CLI interface for location management"""
     import argparse
+    import contextlib
+    import io as _io
     import json
+
+    from cli_output import wants_json, strip_json_flag, emit, emit_error
+
+    json_mode = wants_json()
 
     parser = argparse.ArgumentParser(description='Location management')
     subparsers = parser.add_subparsers(dest='action', help='Action to perform')
@@ -263,7 +269,7 @@ def main():
     connections_parser = subparsers.add_parser('connections', help='Get location connections')
     connections_parser.add_argument('name', help='Location name')
 
-    args = parser.parse_args()
+    args = parser.parse_args(strip_json_flag(sys.argv[1:]))
 
     if not args.action:
         parser.print_help()
@@ -271,36 +277,74 @@ def main():
 
     manager = LocationManager()
 
+    def _quiet():
+        """The manager prints [SUCCESS]/[ERROR] from inside its own logic; in JSON
+        mode that text would precede the envelope and break json.loads."""
+        return (contextlib.redirect_stdout(_io.StringIO()) if json_mode
+                else contextlib.nullcontext())
+
+    def _fail(message, status=1):
+        """JSON mode gets the error envelope; human mode keeps the manager's own
+        message and its bare exit status, byte for byte as before."""
+        if json_mode:
+            emit_error(message, json_mode)
+        sys.exit(status)
+
     if args.action == 'add':
-        if not manager.add_location(args.name, args.position):
-            sys.exit(1)
+        with _quiet():
+            added = manager.add_location(args.name, args.position)
+        if not added:
+            _fail(f"could not add location: {args.name}")
+        emit({'name': args.name, 'position': args.position}, json_mode=json_mode)
 
     elif args.action == 'connect':
-        if not manager.connect_locations(args.from_loc, args.to_loc, args.path):
-            sys.exit(1)
+        with _quiet():
+            connected = manager.connect_locations(args.from_loc, args.to_loc, args.path)
+        if not connected:
+            _fail(f"could not connect {args.from_loc} <-> {args.to_loc}")
+        emit({'from': args.from_loc, 'to': args.to_loc, 'path': args.path},
+             json_mode=json_mode)
 
     elif args.action == 'describe':
-        if not manager.set_description(args.name, args.description):
-            sys.exit(1)
+        with _quiet():
+            described = manager.set_description(args.name, args.description)
+        if not described:
+            _fail(f"could not describe location: {args.name}")
+        emit({'name': args.name, 'description': args.description}, json_mode=json_mode)
 
     elif args.action == 'get':
-        location = manager.get_location(args.name)
-        if location:
-            print(json.dumps({args.name: location}, indent=2))
+        with _quiet():
+            location = manager.get_location(args.name)
+        if not location:
+            _fail(f"no such location: {args.name}")
+        if json_mode:
+            emit({args.name: location}, json_mode=True)
         else:
-            sys.exit(1)
+            print(json.dumps({args.name: location}, indent=2))
 
     elif args.action == 'list':
         locations = manager.list_locations()
-        if locations:
+        if json_mode:
+            emit(locations, json_mode=True)
+        elif locations:
             for loc in locations:
                 print(f"  - {loc}")
         else:
             print("No locations found")
 
     elif args.action == 'connections':
-        connections = manager.get_connections(args.name)
-        if connections:
+        # get_connections() calls get_location(), which prints its [ERROR] to STDOUT
+        # when the name is unknown — unquieted, that text lands ahead of the envelope.
+        with _quiet():
+            connections = manager.get_connections(args.name)
+        if json_mode:
+            # An unknown location yields [] here, indistinguishable from a known one
+            # with no roads, and human mode calls neither a failure (it exits 0). The
+            # flag changes the SHAPE of an answer, never its status, so this stays
+            # ok: true. A caller that needs existence asks `get`, which reports
+            # ok: false.
+            emit(connections, json_mode=True)
+        elif connections:
             print(json.dumps(connections, indent=2))
         else:
             print("No connections found")

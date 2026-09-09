@@ -65,43 +65,59 @@ class NoteManager:
 
 def main():
     """CLI interface for note management."""
-    if len(sys.argv) < 2:
+    import contextlib
+    import io as _io
+    from cli_output import wants_json, strip_json_flag, emit, emit_error
+
+    json_mode = wants_json()
+    argv = strip_json_flag(sys.argv)
+
+    if len(argv) < 2:
         print("Usage: python lib/note_manager.py add <category> <fact>")
         print("       python lib/note_manager.py get [category]")
         print("       python lib/note_manager.py categories")
         sys.exit(1)
 
-    action = sys.argv[1]
+    action = argv[1]
 
     try:
         manager = NoteManager()
 
         if action == 'add':
-            if len(sys.argv) < 4:
-                print("Usage: python lib/note_manager.py add <category> <fact>")
-                sys.exit(1)
-            category = sys.argv[2]
-            fact = sys.argv[3]
-            if not manager.add_fact(category, fact):
-                sys.exit(1)
+            if len(argv) < 4:
+                sys.exit(emit_error(
+                    "usage: note_manager.py add <category> <fact>", json_mode))
+            category, fact = argv[2], argv[3]
+            # add_fact prints [SUCCESS] from inside the manager; in JSON mode that
+            # text would precede the envelope and break json.loads.
+            sink = _io.StringIO()
+            with contextlib.redirect_stdout(sink if json_mode else sys.stdout):
+                ok = manager.add_fact(category, fact)
+            if not ok:
+                sys.exit(emit_error(f"could not record fact in {category}", json_mode))
+            emit({"category": category, "fact": fact}, json_mode=json_mode)
 
         elif action == 'get':
-            category = sys.argv[2] if len(sys.argv) > 2 else None
+            category = argv[2] if len(argv) > 2 else None
             facts = manager.get_facts(category)
-            print(json.dumps(facts, indent=2))
+            if json_mode:
+                emit(facts, json_mode=True)
+            else:
+                print(json.dumps(facts, indent=2))
 
         elif action == 'categories':
             categories = manager.list_categories()
-            for cat in categories:
-                print(f"  - {cat}")
+            if json_mode:
+                emit(categories, json_mode=True)
+            else:
+                for cat in categories:
+                    print(f"  - {cat}")
 
         else:
-            print(f"Unknown action: {action}")
-            sys.exit(1)
+            sys.exit(emit_error(f"unknown action: {action}", json_mode))
 
     except RuntimeError as e:
-        print(f"[ERROR] {e}")
-        sys.exit(1)
+        sys.exit(emit_error(str(e), json_mode))
 
 
 if __name__ == "__main__":

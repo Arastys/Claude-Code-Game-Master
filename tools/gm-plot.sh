@@ -5,6 +5,16 @@
 # Source common utilities
 source "$(dirname "$0")/common.sh"
 
+# Pull --json out of the positional arguments before the case dispatches: several
+# branches forward only "$1"/"$2", so a trailing flag would be silently dropped
+# and the caller would get human text having asked for an envelope.
+split_json_flag "$@"
+set -- ${GM_ARGS+"${GM_ARGS[@]}"}
+# DM_JSON=1 is the documented global envelope switch (lib/cli_output.py), and the
+# manager honours it with no flag in sight — so fold it into JSON_FLAG here, or the
+# human-only guards below would print their text ahead of an envelope.
+[ "${DM_JSON:-}" = "1" ] && JSON_FLAG="--json"
+
 # Usage: gm-plot.sh <action> [args]
 
 if [ "$#" -lt 1 ]; then
@@ -46,10 +56,10 @@ shift  # Remove action from arguments
 # Delegate to Python module based on action
 case "$ACTION" in
     add)
-        $PYTHON_CMD "$LIB_DIR/plot_manager.py" add "$@"
+        $PYTHON_CMD "$LIB_DIR/plot_manager.py" add "$@" $JSON_FLAG
         ;;
     list)
-        $PYTHON_CMD "$LIB_DIR/plot_manager.py" list "$@"
+        $PYTHON_CMD "$LIB_DIR/plot_manager.py" list "$@" $JSON_FLAG
         ;;
 
     show)
@@ -57,7 +67,7 @@ case "$ACTION" in
             echo "Usage: gm-plot.sh show <name>"
             exit 1
         fi
-        $PYTHON_CMD "$LIB_DIR/plot_manager.py" show "$1"
+        $PYTHON_CMD "$LIB_DIR/plot_manager.py" show "$1" $JSON_FLAG
         ;;
 
     search)
@@ -65,7 +75,7 @@ case "$ACTION" in
             echo "Usage: gm-plot.sh search <query>"
             exit 1
         fi
-        $PYTHON_CMD "$LIB_DIR/plot_manager.py" search "$1"
+        $PYTHON_CMD "$LIB_DIR/plot_manager.py" search "$1" $JSON_FLAG
         ;;
 
     update)
@@ -73,7 +83,7 @@ case "$ACTION" in
             echo "Usage: gm-plot.sh update <name> <event>"
             exit 1
         fi
-        $PYTHON_CMD "$LIB_DIR/plot_manager.py" update "$1" "$2"
+        $PYTHON_CMD "$LIB_DIR/plot_manager.py" update "$1" "$2" $JSON_FLAG
         ;;
 
     complete)
@@ -84,9 +94,9 @@ case "$ACTION" in
         NAME="$1"
         OUTCOME="${2:-}"
         if [ -n "$OUTCOME" ]; then
-            $PYTHON_CMD "$LIB_DIR/plot_manager.py" complete "$NAME" "$OUTCOME"
+            $PYTHON_CMD "$LIB_DIR/plot_manager.py" complete "$NAME" "$OUTCOME" $JSON_FLAG
         else
-            $PYTHON_CMD "$LIB_DIR/plot_manager.py" complete "$NAME"
+            $PYTHON_CMD "$LIB_DIR/plot_manager.py" complete "$NAME" $JSON_FLAG
         fi
         ;;
 
@@ -98,18 +108,18 @@ case "$ACTION" in
         NAME="$1"
         REASON="${2:-}"
         if [ -n "$REASON" ]; then
-            $PYTHON_CMD "$LIB_DIR/plot_manager.py" fail "$NAME" "$REASON"
+            $PYTHON_CMD "$LIB_DIR/plot_manager.py" fail "$NAME" "$REASON" $JSON_FLAG
         else
-            $PYTHON_CMD "$LIB_DIR/plot_manager.py" fail "$NAME"
+            $PYTHON_CMD "$LIB_DIR/plot_manager.py" fail "$NAME" $JSON_FLAG
         fi
         ;;
 
     counts)
-        $PYTHON_CMD "$LIB_DIR/plot_manager.py" counts
+        $PYTHON_CMD "$LIB_DIR/plot_manager.py" counts $JSON_FLAG
         ;;
 
     threads)
-        $PYTHON_CMD "$LIB_DIR/plot_manager.py" threads
+        $PYTHON_CMD "$LIB_DIR/plot_manager.py" threads $JSON_FLAG
         ;;
 
     *)

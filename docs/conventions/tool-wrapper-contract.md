@@ -9,7 +9,8 @@ sources:
   - { resource: /tools/gm-extract.sh }
   - { resource: /lib/agent_extractor.py }
   - { resource: /lib/json_ops.py }
-  - { resource: /tests/test_json_wrappers_player.py }
+  - { resource: /tests/test_json_wrappers_onboard.py }
+  - { resource: /tests/test_json_wrappers_tools.py }
 generated: { by: claude-opus-4-8[1m], at: 2026-08-15T12:24:29Z }
 verified: { by: claude-fable-5, at: 2026-08-13T15:15:46Z }
 ---
@@ -104,10 +105,19 @@ a `validate_name`, but the real trust boundary is inside the Python. A manager t
 
 ## Enforcement point
 
-`tests/test_json_wrappers_*.py` (player, npc, session, consequence) run each manager as a
-subprocess and assert the envelope parses with `ok: true` and the expected `data`. That is
-a genuine guard for the four managers covered — and only those four. A new manager gets no
-envelope enforcement until a matching test exists; adding one is part of adding the tool.
+`tests/test_json_wrappers_onboard.py` drives `gm-player.sh onboard` as a subprocess and
+asserts its envelope; `tests/test_json_wrappers_tools.py` does the same for `gm-note.sh`,
+`gm-time.sh`, `gm-plot.sh`, `gm-location.sh`, and `gm-campaign.sh`. Those are the only two
+files named `test_json_wrappers_*.py` — the four-manager glob once claimed here
+(`player, npc, session, consequence`) never existed as separate files. The rest of the
+envelope's coverage is real but scattered across roughly a dozen other test files that
+exercise a manager directly instead of through this pair — `test_faction_manager.py`,
+`test_knowledge_manager.py`, `test_world_tracks.py`, `test_kit_systems.py`,
+`test_play_pack.py`, `test_session_health.py`, `test_resource_axis_progression.py`,
+`test_kit_grit_dial.py`, `test_story_escape_hatches.py`, `test_world_tick.py`,
+`test_entity_dedupe_materialize.py`, and `test_cli_output_json.py` among them. A new manager
+still gets no envelope enforcement until a matching test exists somewhere in that set;
+adding one is part of adding the tool.
 
 ## Related
 

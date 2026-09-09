@@ -8,12 +8,24 @@
 
 source "$(dirname "$0")/common.sh"
 
+split_json_flag "$@"
+set -- ${GM_ARGS+"${GM_ARGS[@]}"}
+# DM_JSON=1 is the documented global envelope switch (lib/cli_output.py), and the
+# manager honours it with no flag in sight — so fold it into JSON_FLAG here, or the
+# human-only guards below would print their text ahead of an envelope.
+[ "${DM_JSON:-}" = "1" ] && JSON_FLAG="--json"
+
 if [ -z "$1" ] || [ -z "$2" ]; then
     echo "Usage: gm-time.sh <time_of_day> <date> [--ticks N] [--duration \"<text>\"]"
     echo "Example: gm-time.sh \"Dawn\" \"16th day of Harvestmoon, Year 1247\""
     echo "         gm-time.sh \"Noon\" \"19th of Harvestmoon\" --duration \"3 days\""
     exit 1
 fi
+
+# No verb here either: $1 and $2 are the time of day and the date. A stray flag in
+# either slot was written to the overview and then advanced every time-clock.
+reject_bad_data_slot "time_of_day" "$1" || exit 1
+reject_bad_data_slot "date" "$2" || exit 1
 
 TIME_OF_DAY="$1"
 DATE="$2"
@@ -49,7 +61,7 @@ done
 
 require_active_campaign
 
-$PYTHON_CMD "$LIB_DIR/time_manager.py" update "$TIME_OF_DAY" "$DATE"
+$PYTHON_CMD "$LIB_DIR/time_manager.py" update "$TIME_OF_DAY" "$DATE" $JSON_FLAG
 RESULT=$?
 if [ $RESULT -ne 0 ]; then exit $RESULT; fi
 
@@ -66,9 +78,22 @@ CLOCK_TICKS=$($PYTHON_CMD "$LIB_DIR/time_manager.py" "${RESOLVE_ARGS[@]}")
 RESULT=$?
 if [ $RESULT -ne 0 ]; then exit $RESULT; fi
 
-$PYTHON_CMD "$LIB_DIR/threat_clocks.py" tick-time --ticks "$CLOCK_TICKS"
+if [ -n "$JSON_FLAG" ]; then
+    $PYTHON_CMD "$LIB_DIR/threat_clocks.py" tick-time --ticks "$CLOCK_TICKS" >/dev/null
+else
+    $PYTHON_CMD "$LIB_DIR/threat_clocks.py" tick-time --ticks "$CLOCK_TICKS"
+fi
 
 # Reactivity: time passing can fire on_time consequences (e.g. nightfall, deadlines).
-echo ""
-bash "$TOOLS_DIR/gm-consequence.sh" tick
-exit 0
+[ -z "$JSON_FLAG" ] && echo ""
+if [ -n "$JSON_FLAG" ]; then
+    # The envelope is the whole of stdout in JSON mode; the tick still runs and
+    # still fires consequences, but its human report is suppressed.
+    bash "$TOOLS_DIR/gm-consequence.sh" tick >/dev/null
+else
+    bash "$TOOLS_DIR/gm-consequence.sh" tick
+fi
+# Propagate the tick's status. Every earlier step in this script checks $? and
+# exits on failure; this one used to discard it, so a failed consequence tick was
+# reported as success.
+exit $?

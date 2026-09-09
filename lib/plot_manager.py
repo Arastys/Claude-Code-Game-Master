@@ -520,6 +520,13 @@ class PlotManager(EntityManager):
 def main():
     """CLI interface for plot management"""
     import argparse
+    import contextlib
+    import io as _io
+    import json
+
+    from cli_output import wants_json, strip_json_flag, emit, emit_error
+
+    json_mode = wants_json()
 
     parser = argparse.ArgumentParser(description='Plot management')
     subparsers = parser.add_subparsers(dest='action', help='Action to perform')
@@ -568,7 +575,7 @@ def main():
     # Active threads summary
     subparsers.add_parser('threads', help='Show active story threads (GM dashboard)')
 
-    args = parser.parse_args()
+    args = parser.parse_args(strip_json_flag(sys.argv[1:]))
 
     if not args.action:
         parser.print_help()
@@ -576,50 +583,104 @@ def main():
 
     manager = PlotManager()
 
+    def _quiet():
+        """The manager prints [SUCCESS]/[ERROR] from inside its own logic; in JSON
+        mode that text would precede the envelope and break json.loads."""
+        return (contextlib.redirect_stdout(_io.StringIO()) if json_mode
+                else contextlib.nullcontext())
+
+    def _fail(message, status=1):
+        """JSON mode gets the error envelope; human mode keeps the manager's own
+        message and its bare exit status, byte for byte as before."""
+        if json_mode:
+            emit_error(message, json_mode)
+        sys.exit(status)
+
     if args.action == 'list':
         plots = manager.list_plots(args.type, args.status)
-        print(manager.format_plot_list(plots))
+        if json_mode:
+            emit(plots, json_mode=True)
+        else:
+            print(manager.format_plot_list(plots))
 
     elif args.action == 'show':
-        formatted = manager.format_plot_status(args.name)
-        if formatted:
-            print(formatted)
+        if json_mode:
+            with _quiet():
+                plot = manager.get_plot(args.name)
+            if plot is None:
+                _fail(f"no such plot: {args.name}")
+            emit({'name': args.name, **plot}, json_mode=True)
         else:
-            sys.exit(1)
+            formatted = manager.format_plot_status(args.name)
+            if formatted:
+                print(formatted)
+            else:
+                sys.exit(1)
 
     elif args.action == 'search':
         plots = manager.search_plots(args.query)
-        if plots:
+        if json_mode:
+            emit(plots, json_mode=True)
+        elif plots:
             print(manager.format_plot_list(plots))
         else:
             print(f"No plots found matching '{args.query}'")
 
     elif args.action == 'add':
-        if not manager.add_plot(args.name, plot_type=args.type, description=args.description,
-                                status=args.status, objectives=args.objectives,
-                                npcs=args.npcs, locations=args.locations, sequence=args.sequence):
-            sys.exit(1)
+        with _quiet():
+            added = manager.add_plot(args.name, plot_type=args.type, description=args.description,
+                                     status=args.status, objectives=args.objectives,
+                                     npcs=args.npcs, locations=args.locations, sequence=args.sequence)
+        if not added:
+            _fail(f"could not seed plot: {args.name}")
+        if json_mode:
+            # Report what was STORED, not what was asked for: an unknown type or
+            # status is coerced to the taxonomy on the way in.
+            stored = manager.get_plot(args.name) or {}
+            emit({'name': args.name,
+                  'type': stored.get('type', args.type),
+                  'status': stored.get('status', args.status)}, json_mode=True)
 
     elif args.action == 'update':
-        if not manager.update_plot(args.name, args.event):
-            sys.exit(1)
+        with _quiet():
+            updated = manager.update_plot(args.name, args.event)
+        if not updated:
+            _fail(f"no such plot: {args.name}")
+        if json_mode:
+            # Progress WAKES a dormant thread, so the resulting status is news.
+            stored = manager.get_plot(args.name) or {}
+            emit({'name': args.name, 'event': args.event,
+                  'status': stored.get('status')}, json_mode=True)
 
     elif args.action == 'complete':
-        if not manager.complete_plot(args.name, args.outcome):
-            sys.exit(1)
+        with _quiet():
+            completed = manager.complete_plot(args.name, args.outcome)
+        if not completed:
+            _fail(f"no such plot: {args.name}")
+        emit({'name': args.name, 'status': 'completed', 'outcome': args.outcome},
+             json_mode=json_mode)
 
     elif args.action == 'fail':
-        if not manager.fail_plot(args.name, args.reason):
-            sys.exit(1)
+        with _quiet():
+            failed = manager.fail_plot(args.name, args.reason)
+        if not failed:
+            _fail(f"no such plot: {args.name}")
+        emit({'name': args.name, 'status': 'failed', 'reason': args.reason},
+             json_mode=json_mode)
 
     elif args.action == 'counts':
-        import json
         counts = manager.get_plot_counts()
-        print(json.dumps(counts, indent=2))
+        if json_mode:
+            emit(counts, json_mode=True)
+        else:
+            print(json.dumps(counts, indent=2))
 
     elif args.action == 'threads':
         threads = manager.get_active_threads()
-        print(manager.format_threads(threads))
+        if json_mode:
+            emit(threads, json_mode=True)
+        else:
+            print(manager.format_threads(threads))
 
 
 if __name__ == "__main__":
