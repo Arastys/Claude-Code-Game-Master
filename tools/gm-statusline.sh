@@ -14,6 +14,12 @@ input=$(cat)  # Claude Code JSON payload on stdin (unused; we read state files)
 # Anchor to repo root via this script's location, not cwd.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# Same redirection every other tool honours (tools/common.sh): tests point this
+# at a fixture tree so they never read or write the player's live campaign. This
+# script does not source common.sh — require_active_campaign would exit non-zero
+# and Claude Code would show nothing at all.
+WORLD_BASE="${GM_WORLD_STATE_BASE:-$ROOT/world-state}"
+
 # 256-color palette (kept light: docs warn multi-line + heavy ANSI can glitch)
 GREEN=$'\033[38;5;42m'
 AMBER=$'\033[38;5;214m'
@@ -47,7 +53,7 @@ divider() {
     printf '%s%s%s%s%s%s%s\n' "$rule" "$left" "$orn" "$mid" "$rule" "$right" "$RESET"
 }
 
-ACTIVE_FILE="$ROOT/world-state/active-campaign.txt"
+ACTIVE_FILE="$WORLD_BASE/active-campaign.txt"
 if [ ! -f "$ACTIVE_FILE" ] || [ ! -s "$ACTIVE_FILE" ]; then
     divider
     printf '%s⚔ %sGM%s  %sno campaign yet%s  %s  %s%s/gm%s %sto begin — import a book, build a world, or jump into a one-shot%s\n' \
@@ -57,7 +63,7 @@ if [ ! -f "$ACTIVE_FILE" ] || [ ! -s "$ACTIVE_FILE" ]; then
 fi
 ACTIVE=$(tr -d '[:space:]' < "$ACTIVE_FILE")
 
-CAMP="$ROOT/world-state/campaigns/$ACTIVE"
+CAMP="$WORLD_BASE/campaigns/$ACTIVE"
 CHAR="$CAMP/character.json"
 OVER="$CAMP/campaign-overview.json"
 
@@ -70,21 +76,52 @@ if [ ! -f "$CHAR" ]; then
 fi
 
 # --- Character fields -------------------------------------------------------
-IFS=$'\t' read -r NAME RACE CLASS LEVEL AC GP HP_CUR HP_MAX XP_CUR XP_NEXT LOC < <(
-    jq -r '
-      [ (.name // .identity.name // "?"),
-        (.race // .identity.race // "?"),
-        (.class // .identity.class // "?"),
-        (.level // .progression.level // 1),
-        (.ac // .vitals.ac // "?"),
-        (.gold // .inventory.gold // 0),
-        (.hp.current // .vitals.hp.current // .hp // 0),
-        (.hp.max // .vitals.hp.max // .hp // 0),
-        (.xp.current // .progression.xp.current // .xp // 0),
-        (.xp.next_level // .progression.xp.next_level // 0),
-        (.current_location // .details.current_location // "?")
-      ] | @tsv' "$CHAR"
-)
+# The kit decides what this character HAS. Absent fields are omitted rather than
+# rendered as "?" or an invented 0 — a world without coin has no gold line, and a
+# world without classes advertises no missing class.
+RULES="$CAMP/ruleset.json"
+[ -f "$RULES" ] || RULES=/dev/null
+
+# Row fields are read with IFS=$'\x1f' (ASCII Unit Separator), not a literal
+# tab, and CR is stripped first. Two platform quirks combine badly otherwise:
+# (1) tab is one of bash's "blank" IFS characters, so `read` collapses runs of
+# them and silently drops empty fields — exactly the fields this design needs
+# to stay empty (an absent stat must read as "", not disappear and shift every
+# field after it); (2) this platform's jq writes CRLF, so an unstripped \r
+# lands inside the last field (EXTRA). Neither is the --slurpfile risk the
+# plan called out; both are verified on this platform, not assumed.
+IFS=$'\x1f' read -r NAME RACE CLASS LEVEL AC GP HP_CUR HP_MAX XP_CUR XP_NEXT LOC EXTRA < <(
+    jq -rn --slurpfile c "$CHAR" --slurpfile k "$RULES" '
+      # Named to_label, not label: jq reserves "label" for its label/break
+      # control-flow syntax, so `def label:` is a compile error.
+      def to_label: gsub("_"; " ") | split(" ")
+                 | map((.[0:1] | ascii_upcase) + (.[1:] | ascii_downcase))
+                 | join(" ");
+      def shown($v): if ($v | type) == "object"
+                     then (($v.current // 0) | tostring)
+                          + (if $v.max != null then "/" + ($v.max | tostring) else "" end)
+                     else ($v | tostring) end;
+      ($c[0] // {}) as $ch
+      | ($k[0] // {}) as $kit
+      | ($ch.hp // $ch.vitals.hp) as $hp
+      | (($kit.stat_schema.vitals // ["hp"]) - ["hp"]) as $vitals
+      | ($kit.stat_schema.traits // []) as $traits
+      | [ ($ch.name  // $ch.identity.name  // "")
+        , ($ch.race  // $ch.identity.race  // "")
+        , ($ch.class // $ch.identity.class // "")
+        , ($ch.level // $ch.progression.level // 1)
+        , ($ch.ac    // $ch.vitals.ac // "")
+        , (if ($ch.gold // $ch.inventory.gold) != null
+             then ($ch.gold // $ch.inventory.gold) | tostring else "" end)
+        , (if ($hp | type) == "object" then ($hp.current // 0) else ($hp // 0) end)
+        , (if ($hp | type) == "object" then ($hp.max // 0) else 0 end)
+        , (($ch.xp.current // $ch.progression.xp.current // "") | tostring)
+        , (($ch.xp.next_level // $ch.progression.xp.next_level // "") | tostring)
+        , ($ch.current_location // $ch.details.current_location // "")
+        , ( [ ($vitals[] | select($ch[.] != null) | (. | to_label) + " " + shown($ch[.]))
+            , ($traits[] | select($ch[.] != null) | (. | to_label) + " " + ($ch[.] | tostring))
+            ] | join("") )
+        ] | @tsv' | tr -d '\r' | tr '\t' '\037')
 
 # Conditions array -> status label; fall back to HP-derived state.
 CONDS=$(jq -r '(.conditions // []) | map(ascii_downcase) | join(", ")' "$CHAR" 2>/dev/null)
@@ -127,8 +164,30 @@ BAR=""
 # --- Render (3 lines) -------------------------------------------------------
 # Build each line as a string, then emit. Clearer than one packed printf.
 
-L1="${TEAL}⚔ ${BOLD}${NAME}${RESET}  ${DIM}Lv${LEVEL} ${RACE} ${CLASS}${RESET}  ${SEP}  ${AMBER}${LOC}${RESET}"
-L2="  HP ${HPC}${BAR}${RESET} ${HP_CUR}/${HP_MAX} ${SEPV} ${DIM}AC${RESET} ${AC} ${SEPV} ${GOLD}${GP}gp${RESET} ${SEPV} ${DIM}XP${RESET} ${XP_CUR}/${XP_NEXT} ${SEPV} ${STATEC}${STATE}${RESET}"
+IDENT="Lv${LEVEL}"
+[ -n "$RACE" ]  && IDENT="$IDENT $RACE"
+[ -n "$CLASS" ] && IDENT="$IDENT $CLASS"
+L1="${TEAL}⚔ ${BOLD}${NAME}${RESET}  ${DIM}${IDENT}${RESET}"
+[ -n "$LOC" ] && L1="$L1  ${SEP}  ${AMBER}${LOC}${RESET}"
+
+# HP always (every kit has a body); everything else only when the sheet has it.
+if [ "$HP_MAX" -gt 0 ] 2>/dev/null; then
+    L2="  HP ${HPC}${BAR}${RESET} ${HP_CUR}/${HP_MAX}"
+else
+    L2="  HP ${HPC}${BAR}${RESET} ${HP_CUR}"
+fi
+# Kit-declared vitals and traits, already labelled by jq, \x01-separated.
+if [ -n "$EXTRA" ]; then
+    OLDIFS=$IFS; IFS=$'\001'
+    for seg in $EXTRA; do
+        [ -n "$seg" ] && L2="$L2 ${SEPV} ${DIM}${seg%% *}${RESET} ${seg#* }"
+    done
+    IFS=$OLDIFS
+fi
+[ -n "$AC" ] && L2="$L2 ${SEPV} ${DIM}AC${RESET} ${AC}"
+[ -n "$GP" ] && L2="$L2 ${SEPV} ${GOLD}${GP}gp${RESET}"
+[ -n "$XP_CUR" ] && [ -n "$XP_NEXT" ] && L2="$L2 ${SEPV} ${DIM}XP${RESET} ${XP_CUR}/${XP_NEXT}"
+L2="$L2 ${SEPV} ${STATEC}${STATE}${RESET}"
 
 # Top rule — frames the HUD off from the conversation above.
 divider "$RULEC" "$ORNC"
