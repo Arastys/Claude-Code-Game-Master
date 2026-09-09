@@ -175,7 +175,8 @@ class PlayerManager(EntityManager):
             return []
         return [char.get('name', 'character').lower().replace(' ', '-')]
 
-    def _identity_line(self, char: Dict, fallback_name: str = 'Unknown') -> str:
+    def _identity_line(self, char: Dict, fallback_name: str = 'Unknown',
+                        rendered: set = None) -> str:
         """'Rhiannon - Level 0 Brythonic' — name, level, then whatever identity
         fields the sheet actually carries.
 
@@ -183,25 +184,40 @@ class PlayerManager(EntityManager):
         base line hardcoded '?' for both, so a world without classes advertised a
         missing one on every `gm-player.sh show`. Mirrors the CHARACTER brief's
         assembly in session_manager so the two surfaces cannot drift.
+
+        `rendered` is the cross-helper dedup set threaded through
+        _identity_line/_detail_segments/_vitals_summary/_traits_summary by
+        show_player/show_all_players: each key this helper actually prints is
+        added to it, so a kit that declares a trait sharing a name with an
+        identity field (e.g. `traits: ["race"]`) does not get it printed twice.
+        Defaults to a fresh set so any existing single-helper caller still works.
         """
+        if rendered is None:
+            rendered = set()
         line = f"{char.get('name', fallback_name)} - Level {char.get('level', 1)}"
         for key in ('race', 'class'):
             if char.get(key):
                 line += f" {char[key]}"
+                rendered.add(key)
         return line
 
-    def _detail_segments(self, char: Dict) -> str:
+    def _detail_segments(self, char: Dict, rendered: set = None) -> str:
         """' (HP: 30/30, Gold: 12)' — HP when the kit declares it or the sheet
-        carries it, gold only when the sheet actually has it, and never a value
-        the declared-vitals summary is already going to print."""
+        carries it, gold only when the sheet actually has it and no earlier
+        helper (via `rendered`) already printed it, and never a value the
+        declared-vitals summary is already going to print."""
+        if rendered is None:
+            rendered = set()
         declared = self._kit_vitals()
         details = []
         if 'hp' in declared or 'hp' in char:
             current, maximum = self._read_vital(char, 'hp')
             details.append(
                 f"HP: {current}/{maximum}" if maximum is not None else f"HP: {current}")
-        if 'gold' in char and 'gold' not in declared:
+            rendered.add('hp')
+        if 'gold' in char and 'gold' not in declared and 'gold' not in rendered:
             details.append(f"Gold: {char['gold']}")
+            rendered.add('gold')
         return f" ({', '.join(details)})" if details else ""
 
     def show_player(self, name: str) -> Optional[str]:
@@ -211,8 +227,11 @@ class PlayerManager(EntityManager):
             print(f"[ERROR] Character '{name}' not found")
             return None
 
-        summary = self._identity_line(char, name) + self._detail_segments(char)
-        summary += self._vitals_summary(char) + self._traits_summary(char)
+        rendered = set()
+        summary = (self._identity_line(char, name, rendered)
+                   + self._detail_segments(char, rendered)
+                   + self._vitals_summary(char, rendered)
+                   + self._traits_summary(char, rendered))
         status = char.get('status')
         if status in ('dying', 'dead'):
             summary += f" | {status.upper()}"
@@ -226,9 +245,10 @@ class PlayerManager(EntityManager):
         char = self._load_character()
         if not char:
             return []
+        rendered = set()
         return [
-            self._identity_line(char) + self._detail_segments(char)
-            + self._vitals_summary(char) + self._traits_summary(char)
+            self._identity_line(char, rendered=rendered) + self._detail_segments(char, rendered)
+            + self._vitals_summary(char, rendered) + self._traits_summary(char, rendered)
         ]
 
     def set_current_player(self, name: str) -> bool:
@@ -569,30 +589,38 @@ class PlayerManager(EntityManager):
             return raw, None
         return 0, None
 
-    def _vitals_summary(self, char: Dict) -> str:
-        """' | Vigor: 3/5 | Corruption: 2' for the kit vitals present on the sheet."""
+    def _vitals_summary(self, char: Dict, rendered: set = None) -> str:
+        """' | Vigor: 3/5 | Corruption: 2' for the kit vitals present on the sheet,
+        skipping any name an earlier helper (via `rendered`) already printed."""
+        if rendered is None:
+            rendered = set()
         parts = []
         for vital in self._kit_vitals():
-            if vital == 'hp' or vital not in char:
+            if vital == 'hp' or vital in rendered or vital not in char:
                 continue
             current, maximum = self._read_vital(char, vital)
             value = f"{current}/{maximum}" if maximum is not None else f"{current}"
             parts.append(f"{stat_label(vital)}: {value}")
+            rendered.add(vital)
         return f" | {' | '.join(parts)}" if parts else ""
 
-    def _traits_summary(self, char: Dict) -> str:
-        """' | Generation: 5' for the kit traits the sheet carries.
+    def _traits_summary(self, char: Dict, rendered: set = None) -> str:
+        """' | Generation: 5' for the kit traits the sheet carries, skipping any
+        name an earlier helper (via `rendered`) already printed.
 
         Sibling of _vitals_summary. A trait is a fixed property the world cares
         about and the engine deliberately does not understand; the CHARACTER brief
         already renders them, and `show` reporting a different set of facts about
         the same character is the cross-surface drift this plan exists to delete.
         """
+        if rendered is None:
+            rendered = set()
         parts = []
         for trait in self.world_kit().traits():
-            if trait not in char:
+            if trait in rendered or trait not in char:
                 continue
             parts.append(f"{stat_label(trait)}: {char[trait]}")
+            rendered.add(trait)
         return f" | {' | '.join(parts)}" if parts else ""
 
     def modify_vital(self, name: str, vital: str, amount: Optional[int] = None,

@@ -101,6 +101,77 @@ def test_the_hud_survives_a_scalar_hp_sheet(tmp_path):
     assert "6" in out
 
 
+VIGOR_ONLY = {
+    "name": "vigor-only",
+    "stat_schema": {"attributes": ["might"], "vitals": ["vigor"]},
+    "progression": {"model": "milestone"},
+}
+
+
+def test_the_hud_invents_no_hp_track_for_a_kit_that_declares_none(tmp_path):
+    """FIX 1: a kit whose declared vitals omit hp entirely (vitals: ["vigor"])
+    must render no HP segment at all — the old code fell into HP_MAX=0 and
+    rendered an empty red bar labelled Critical, permanently, on a world with
+    no hit points."""
+    out = _run(_world(tmp_path, "probe", VIGOR_ONLY,
+                      {"name": "Ashen", "level": 1, "vigor": 4}))
+    assert "HP" not in out
+    assert "Critical" not in out
+
+
+def test_the_hud_scalar_hp_at_full_health_is_not_critical(tmp_path):
+    """FIX 1: a plain-number hp track has no max to compute a proportion from.
+    The old code defaulted PCT to 0 in that case, so a character at full health
+    on a scalar-hp kit rendered a bold red bar labelled Critical, permanently."""
+    out = _run(_world(tmp_path, "probe", CUSTOM,
+                      {"name": "Nomad", "level": 1, "hp": 6}))
+    assert "6" in out
+    assert "Critical" not in out
+
+
+def test_the_hud_survives_a_legacy_plain_int_xp(tmp_path):
+    """FIX 2: `$ch.xp.current` on a plain-int xp is a jq type error (exit 5, no
+    stdout), which left every field of the read empty — the whole HUD blanked
+    to `⚔   Lv` after every assistant message on a normal, documented sheet
+    shape (see player_manager.py's _xp_view)."""
+    out = _run(_world(tmp_path, "realms", DND5E,
+                      {"name": "Bram", "level": 3,
+                       "hp": {"current": 20, "max": 24}, "xp": 900}))
+    assert "Bram" in out
+
+
+def test_the_hud_keeps_the_characters_location_when_the_overview_has_none(tmp_path):
+    """FIX 3: the overview jq read still used the transport this branch
+    documented as broken (IFS=$'\\t' with unstripped CRLF). With a date/time but
+    no player_position.current_location, OLOC picked up a stray CR, which read
+    as non-empty and clobbered the character's own location with garbage."""
+    out = _run(_world(tmp_path, "probe", CUSTOM,
+                      {"name": "Rhiannon", "level": 0,
+                       "hp": {"current": 30, "max": 30},
+                       "current_location": "Cwm Bychan"},
+                      overview={"current_date": "Day 3", "time_of_day": "Dusk"}))
+    lines = out.splitlines()
+    line1 = next(l for l in lines if "Rhiannon" in l)
+    assert "Cwm Bychan" in line1
+    assert not line1.rstrip().endswith("·")
+
+
+RACE_TRAIT_KIT = {
+    "name": "race-trait",
+    "stat_schema": {"attributes": ["might"], "vitals": ["hp"], "traits": ["race"]},
+    "progression": {"model": "milestone"},
+}
+
+
+def test_the_hud_does_not_double_print_a_trait_that_collides_with_identity(tmp_path):
+    """FIX 4: `race` is already folded into the identity segment (Lv1 Cimmerian);
+    a kit declaring it again as a trait must not print the value twice."""
+    out = _run(_world(tmp_path, "probe", RACE_TRAIT_KIT,
+                      {"name": "Conan", "level": 1, "race": "Cimmerian",
+                       "hp": {"current": 5, "max": 5}}))
+    assert out.count("Cimmerian") == 1
+
+
 def test_the_hud_still_reports_no_campaign_and_no_character(tmp_path):
     empty = tmp_path / "world-state"
     (empty / "campaigns").mkdir(parents=True)

@@ -48,14 +48,18 @@ class IdentityOnboarding(EntityManager):
         return inv
 
     def _canon_vitals(self, sheet: Dict[str, Any]) -> Dict[str, Any]:
-        """hp always; ac only when the sheet carries one, or on a 5e kit.
+        """hp always; every other declared vital the sheet carries; ac only when
+        the sheet has one, or on a 5e kit.
 
-        The old unconditional `sheet.get("ac", 10)` gave an armour class to every
-        canon NPC lifted into the PC slot, including on worlds that have no such
-        concept. Same defect family as save_character.py's DND_SHEET_DEFAULTS, and
-        gated the same way — through the kit, never through a name.
+        The old version knew exactly two names, so promoting a canon NPC on a kit
+        declaring `blood` silently dropped it. Declared traits ride along too —
+        lifting a character must not quietly strip what the world says they are.
         """
         vitals = {"hp": copy.deepcopy(sheet.get("hp", _default_vitals()["hp"]))}
+        kit = WorldKit(self._wsd)
+        for name in list(kit.vitals()) + list(kit.traits()):
+            if name != "hp" and name in sheet:
+                vitals[name] = copy.deepcopy(sheet[name])
         if "ac" in sheet:
             vitals["ac"] = sheet["ac"]
         elif self._is_dnd5e:

@@ -901,8 +901,7 @@ class SessionManager(EntityManager):
             # invented `Gold: 0` on worlds with no coinage, while hiding every kit
             # vital beyond hp. gm-player.sh show's vitals SUFFIX (_vitals_summary) has
             # been kit-driven for some time; this block kept a divergent hardcoded
-            # copy of it — show's base line (name/race/class/HP/gold) is still a
-            # hardcoded 5e f-string, untouched by this fix.
+            # copy of it.
             from player_manager import PlayerManager
 
             declared = kit.vitals() if kit is not None else ["hp"]

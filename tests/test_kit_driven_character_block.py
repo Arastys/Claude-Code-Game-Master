@@ -324,6 +324,20 @@ def test_race_declared_as_a_trait_does_not_double_with_identity(tmp_path):
     assert line.count("Cimmerian") == 1
 
 
+def test_show_player_renders_race_trait_once(tmp_path):
+    """FIX 4: `show_player` must not double-print a trait that collides with the
+    identity line — the same gap test_race_declared_as_a_trait_does_not_double_
+    with_identity (above) covers for the CHARACTER brief, but `show` built its
+    identity/detail/vitals/trait segments without sharing a `rendered` set."""
+    from lib.player_manager import PlayerManager
+    world = _world(tmp_path, "twice-named-show", RACE_TRAIT_RULESET, {
+        "name": "D", "level": 1, "race": "Cimmerian",
+        "hp": {"current": 5, "max": 5},
+    })
+    out = PlayerManager(world).show_player("D")
+    assert out.count("Cimmerian") == 1
+
+
 def test_revive_survives_a_sheet_whose_hp_is_a_plain_number(tmp_path):
     """A kit may model hp as a bare int. `revive` read char['hp'].get('max') and
     then assigned char['hp']['current'], so on such a kit reviving raised
@@ -390,6 +404,24 @@ def test_from_canon_still_defaults_armour_class_on_dnd5e(tmp_path):
     world = _world_with_npc(tmp_path, "realms", DND5E_RULESET,
                             {"level": 2, "hp": {"current": 9, "max": 9}})
     assert IdentityOnboarding(world).from_canon("Mair")["vitals"]["ac"] == 10
+
+
+def test_from_canon_carries_declared_vitals_and_traits(tmp_path):
+    """FIX 6: `_canon_vitals` only knew `hp` and `ac`, so a canon NPC promoted to
+    PC on a kit declaring `blood`/`generation` silently dropped both."""
+    from lib.identity_onboarding import IdentityOnboarding
+    kit = {
+        "name": "custom",
+        "stat_schema": {"attributes": ["might"], "vitals": ["hp", "blood"],
+                        "traits": ["generation"]},
+        "progression": {"model": "milestone"},
+    }
+    world = _world_with_npc(tmp_path, "canon-vitals", kit,
+                            {"level": 2, "hp": {"current": 6, "max": 6},
+                             "blood": 7, "generation": 5})
+    vitals = IdentityOnboarding(world).from_canon("Mair")["vitals"]
+    assert vitals["blood"] == 7
+    assert vitals["generation"] == 5
 
 
 PARTY_KIT = {
