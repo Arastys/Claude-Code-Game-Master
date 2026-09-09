@@ -13,6 +13,7 @@ that.
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -40,6 +41,18 @@ def _run(world, tool, *args):
         ["bash", str(REPO_ROOT / "tools" / tool), *args],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         env={**os.environ, "GM_WORLD_STATE_BASE": str(world)},
+        cwd=str(REPO_ROOT))
+
+
+def _run_dm_json(world, tool, *args):
+    """Same as _run, but with the ambient DM_JSON=1 envelope switch set and no
+    --json flag anywhere — this is what should also produce (gm-note.sh,
+    gm-time.sh) or refuse to produce (campaign_manager.py's bare-string verbs)
+    an envelope purely from the environment."""
+    return subprocess.run(
+        ["bash", str(REPO_ROOT / "tools" / tool), *args],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        env={**os.environ, "GM_WORLD_STATE_BASE": str(world), "DM_JSON": "1"},
         cwd=str(REPO_ROOT))
 
 
@@ -125,6 +138,88 @@ def test_location_list_emits_an_envelope(tmp_path):
 def test_campaign_list_emits_an_envelope(tmp_path):
     world, _ = _world(tmp_path)
     assert _envelope(_run(world, "gm-campaign.sh", "list", "--json")) is not None
+
+
+def test_dm_json_env_yields_exactly_one_envelope_from_each_of_the_five_tools(tmp_path):
+    """DM_JSON=1 alone (no --json flag anywhere) must produce exactly one
+    parseable envelope on stdout for every one of the five tools this branch
+    fixed. Before this fix, gm-note.sh and gm-time.sh never folded DM_JSON into
+    JSON_FLAG, so a downstream manager emitted an envelope purely from reading
+    DM_JSON out of the environment itself while the wrapper's own human-only
+    guards (the "Fact Categories:" header, the blank-line separator, the visible
+    threat-clock/consequence tick) printed text alongside it — json.loads(stdout)
+    saw leaked text or multiple concatenated objects rather than one clean
+    envelope."""
+    world, _ = _world(tmp_path)
+    _run(world, "gm-plot.sh", "add", "The Cup", "--description", "A thread.")
+    _run(world, "gm-location.sh", "add", "Y Bedd", "the ridge")
+    cases = [
+        ("gm-note.sh", ["categories"]),
+        ("gm-time.sh", ["Dawn", "The ninth day"]),
+        ("gm-plot.sh", ["list"]),
+        ("gm-location.sh", ["list"]),
+        ("gm-campaign.sh", ["list"]),
+    ]
+    for tool, args in cases:
+        proc = _run_dm_json(world, tool, *args)
+        assert proc.returncode == 0, (tool, proc.stdout, proc.stderr)
+        payload = json.loads(proc.stdout)  # raises on leaked text or extra objects
+        assert payload["ok"] is True, (tool, payload)
+
+
+def test_campaign_manager_path_ignores_ambient_dm_json(tmp_path):
+    """`lib/campaign_manager.py`'s `path`/`active`/`slugify`/`resolve` are
+    plumbing consumed as a BARE STRING inside `$( )` at roughly twenty call
+    sites (tools/gm-search.sh, gm-session.sh, gm-npc.sh, gm-playpack.sh,
+    gm-extract.sh, plus several .claude/commands and world-builder). An ambient
+    DM_JSON=1 must not turn their output into an envelope — only a literal
+    --json on the invocation itself counts — or `CAMPAIGN_DIR=$(... path)`
+    silently becomes garbage. This drives the manager directly (the layer the
+    fix touches; test_slug_unify.py uses the same direct-invocation pattern for
+    `slugify`), because tools/gm-campaign.sh's own pre-existing
+    `[ "${DM_JSON:-}" = "1" ] && JSON_FLAG="--json"` fold (added for its
+    genuinely-structured verbs like `list`/`info`) still converts an ambient
+    DM_JSON=1 into a literal --json before invoking Python for every action —
+    including `path` and `active` — so it cannot be told apart there from an
+    explicit flag. That wrapper-level gap is out of this fix's scope."""
+    world, _ = _world(tmp_path)
+    proc = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "lib" / "campaign_manager.py"), "path"],
+        capture_output=True, text=True, encoding="utf-8",
+        env={**os.environ, "GM_WORLD_STATE_BASE": str(world), "DM_JSON": "1"},
+        cwd=str(REPO_ROOT))
+    assert proc.returncode == 0, proc.stderr
+    out = proc.stdout.strip()
+    assert not out.startswith("{"), out
+    assert out.endswith("probe"), out
+
+
+def test_campaign_manager_active_ignores_ambient_dm_json(tmp_path):
+    world, _ = _world(tmp_path)
+    proc = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "lib" / "campaign_manager.py"), "active"],
+        capture_output=True, text=True, encoding="utf-8",
+        env={**os.environ, "GM_WORLD_STATE_BASE": str(world), "DM_JSON": "1"},
+        cwd=str(REPO_ROOT))
+    assert proc.returncode == 0, proc.stderr
+    out = proc.stdout.strip()
+    assert not out.startswith("{"), out
+    assert out == "probe"
+
+
+def test_campaign_manager_path_with_explicit_json_flag_still_envelopes(tmp_path):
+    """The explicit flag is exactly what still asks for the envelope, with or
+    without DM_JSON in the environment."""
+    world, _ = _world(tmp_path)
+    proc = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "lib" / "campaign_manager.py"), "path", "--json"],
+        capture_output=True, text=True, encoding="utf-8",
+        env={**os.environ, "GM_WORLD_STATE_BASE": str(world)},
+        cwd=str(REPO_ROOT))
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["data"].endswith("probe")
 
 
 def test_no_tool_ever_writes_the_flag_as_data(tmp_path):

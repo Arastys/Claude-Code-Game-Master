@@ -10,6 +10,10 @@ source "$(dirname "$0")/common.sh"
 
 split_json_flag "$@"
 set -- ${GM_ARGS+"${GM_ARGS[@]}"}
+# DM_JSON=1 is the documented global envelope switch (lib/cli_output.py), and the
+# manager honours it with no flag in sight — so fold it into JSON_FLAG here, or the
+# human-only guards below would print their text ahead of an envelope.
+[ "${DM_JSON:-}" = "1" ] && JSON_FLAG="--json"
 
 if [ -z "$1" ] || [ -z "$2" ]; then
     echo "Usage: gm-time.sh <time_of_day> <date> [--ticks N] [--duration \"<text>\"]"
@@ -20,8 +24,8 @@ fi
 
 # No verb here either: $1 and $2 are the time of day and the date. A stray flag in
 # either slot was written to the overview and then advanced every time-clock.
-reject_flag_in_data_slot "time_of_day" "$1" || exit 1
-reject_flag_in_data_slot "date" "$2" || exit 1
+reject_bad_data_slot "time_of_day" "$1" || exit 1
+reject_bad_data_slot "date" "$2" || exit 1
 
 TIME_OF_DAY="$1"
 DATE="$2"

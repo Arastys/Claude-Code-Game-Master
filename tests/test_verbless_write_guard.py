@@ -110,3 +110,39 @@ def test_a_legitimate_time_update_still_works_and_still_ticks(tmp_path):
 def test_note_categories_still_works(tmp_path):
     world, _ = _world(tmp_path)
     assert _run(world, "gm-note.sh", "categories").returncode == 0
+
+
+def test_note_refuses_an_empty_category(tmp_path):
+    """The hyphen check alone lets this through: an empty string does not match
+    `-*`. `CAT=""; FACT="a fact"; gm-note.sh "$CAT" "$FACT"` recorded a fact
+    under category "" and exited 0 before this fix — the identical corruption
+    the hyphen guard exists to prevent, just reached by an empty variable
+    instead of a stray flag."""
+    world, campaign = _world(tmp_path)
+    proc = _run(world, "gm-note.sh", "", "a fact")
+    assert proc.returncode != 0
+    assert _read(campaign, "facts.json") == {}
+
+
+def test_note_refuses_an_empty_fact(tmp_path):
+    world, campaign = _world(tmp_path)
+    proc = _run(world, "gm-note.sh", "lore", "")
+    assert proc.returncode != 0
+    assert _read(campaign, "facts.json") == {}
+
+
+def test_note_refuses_a_whitespace_only_category_and_fact(tmp_path):
+    """The exact repro from the review: CAT=""; FACT=""; gm-note.sh "$CAT"
+    "$FACT" — both empty. A whitespace-only value is the same shape of mistake
+    and must be refused too."""
+    world, campaign = _world(tmp_path)
+    proc = _run(world, "gm-note.sh", "   ", "   ")
+    assert proc.returncode != 0
+    assert _read(campaign, "facts.json") == {}
+
+
+def test_the_empty_refusal_names_the_slot(tmp_path):
+    world, _ = _world(tmp_path)
+    proc = _run(world, "gm-note.sh", "", "a fact")
+    assert "category" in proc.stderr
+    assert "cannot be empty" in proc.stderr

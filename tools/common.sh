@@ -172,7 +172,8 @@ split_json_flag() {
     done
 }
 
-# Refuse a value beginning with a hyphen in a positional DATA slot.
+# Refuse a value beginning with a hyphen, or an empty/whitespace-only value, in a
+# positional DATA slot.
 #
 # gm-note.sh and gm-time.sh take no subcommand — their first positional IS data —
 # so every string was a valid category and a valid time of day, and no invocation
@@ -180,7 +181,16 @@ split_json_flag() {
 # was "--json"; `gm-time.sh list --json` set the campaign date to "--json" and
 # advanced every time-clock. A category, a fact, a time of day and a date never
 # legitimately begin with "-", so a value that does is a mistake every time.
-reject_flag_in_data_slot() {
+#
+# The hyphen check alone still lets an empty value through: `CAT=""; FACT="";
+# gm-note.sh "$CAT" "$FACT"` recorded a fact under category "" with text "" and
+# exited 0 — the identical corruption this guard exists to prevent. "a variable
+# that came back empty" was named in the original diagnosis alongside the flag
+# case, so refuse it here too: any future verbless caller inherits it.
+#
+# The name used to be reject_flag_in_data_slot; renamed because it now refuses
+# more than flags.
+reject_bad_data_slot() {
     local _slot="$1" _value="$2"
     case "$_value" in
         -*)
@@ -189,6 +199,13 @@ reject_flag_in_data_slot() {
             return 1
             ;;
     esac
+    # Whitespace-only counts as empty: look for any non-space character, refuse
+    # if none is found (covers both "" and "   ").
+    if [[ ! "$_value" =~ [^[:space:]] ]]; then
+        echo "[ERROR] $_slot cannot be empty." >&2
+        echo "        This position takes data, not a blank value." >&2
+        return 1
+    fi
     return 0
 }
 
