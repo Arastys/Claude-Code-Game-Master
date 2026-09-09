@@ -57,7 +57,7 @@ done
 
 require_active_campaign
 
-$PYTHON_CMD "$LIB_DIR/time_manager.py" update "$TIME_OF_DAY" "$DATE"
+$PYTHON_CMD "$LIB_DIR/time_manager.py" update "$TIME_OF_DAY" "$DATE" $JSON_FLAG
 RESULT=$?
 if [ $RESULT -ne 0 ]; then exit $RESULT; fi
 
@@ -74,11 +74,21 @@ CLOCK_TICKS=$($PYTHON_CMD "$LIB_DIR/time_manager.py" "${RESOLVE_ARGS[@]}")
 RESULT=$?
 if [ $RESULT -ne 0 ]; then exit $RESULT; fi
 
-$PYTHON_CMD "$LIB_DIR/threat_clocks.py" tick-time --ticks "$CLOCK_TICKS"
+if [ -n "$JSON_FLAG" ]; then
+    $PYTHON_CMD "$LIB_DIR/threat_clocks.py" tick-time --ticks "$CLOCK_TICKS" >/dev/null
+else
+    $PYTHON_CMD "$LIB_DIR/threat_clocks.py" tick-time --ticks "$CLOCK_TICKS"
+fi
 
 # Reactivity: time passing can fire on_time consequences (e.g. nightfall, deadlines).
-echo ""
-bash "$TOOLS_DIR/gm-consequence.sh" tick
+[ -z "$JSON_FLAG" ] && echo ""
+if [ -n "$JSON_FLAG" ]; then
+    # The envelope is the whole of stdout in JSON mode; the tick still runs and
+    # still fires consequences, but its human report is suppressed.
+    bash "$TOOLS_DIR/gm-consequence.sh" tick >/dev/null
+else
+    bash "$TOOLS_DIR/gm-consequence.sh" tick
+fi
 # Propagate the tick's status. Every earlier step in this script checks $? and
 # exits on failure; this one used to discard it, so a failed consequence tick was
 # reported as success.

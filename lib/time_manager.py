@@ -121,17 +121,26 @@ def _parse_ticks_flags(argv):
 
 def main():
     """CLI interface for time management."""
-    if len(sys.argv) < 2:
+    import contextlib
+    import io as _io
+    from cli_output import wants_json, strip_json_flag, emit, emit_error
+
+    json_mode = wants_json()
+    argv = strip_json_flag(sys.argv)
+
+    if len(argv) < 2:
         print("Usage: python lib/time_manager.py update <time_of_day> <date>")
         print("       python lib/time_manager.py get")
         print("       python lib/time_manager.py ticks [--ticks N] [--duration TEXT]")
         sys.exit(1)
 
-    action = sys.argv[1]
+    action = argv[1]
 
     # ticks is a pure mapping — no campaign, so it can run before TimeManager().
+    # It prints a bare number that gm-time.sh captures in a command substitution,
+    # so it must stay a bare number even in JSON mode.
     if action == "ticks":
-        ticks, duration = _parse_ticks_flags(sys.argv[2:])
+        ticks, duration = _parse_ticks_flags(argv[2:])
         print(ticks_for_elapsed(ticks=ticks, duration=duration))
         return
 
@@ -139,26 +148,31 @@ def main():
         manager = TimeManager()
 
         if action == 'update':
-            if len(sys.argv) < 4:
-                print("Usage: python lib/time_manager.py update <time_of_day> <date>")
-                sys.exit(1)
-            time_of_day = sys.argv[2]
-            date = sys.argv[3]
-            if not manager.update_time(time_of_day, date):
-                sys.exit(1)
+            if len(argv) < 4:
+                sys.exit(emit_error(
+                    "usage: time_manager.py update <time_of_day> <date>", json_mode))
+            time_of_day, date = argv[2], argv[3]
+            sink = _io.StringIO()
+            with contextlib.redirect_stdout(sink if json_mode else sys.stdout):
+                ok = manager.update_time(time_of_day, date)
+            if not ok:
+                sys.exit(emit_error("could not update time", json_mode))
+            emit({"time_of_day": time_of_day, "current_date": date},
+                 json_mode=json_mode)
 
         elif action == 'get':
             time_info = manager.get_time()
-            print(f"Time: {time_info['time_of_day']}")
-            print(f"Date: {time_info['current_date']}")
+            if json_mode:
+                emit(time_info, json_mode=True)
+            else:
+                print(f"Time: {time_info['time_of_day']}")
+                print(f"Date: {time_info['current_date']}")
 
         else:
-            print(f"Unknown action: {action}")
-            sys.exit(1)
+            sys.exit(emit_error(f"unknown action: {action}", json_mode))
 
     except RuntimeError as e:
-        print(f"[ERROR] {e}")
-        sys.exit(1)
+        sys.exit(emit_error(str(e), json_mode))
 
 
 if __name__ == "__main__":
