@@ -7,5 +7,6 @@
 * [An NPC's location lived in two fields (unified 2026-08-13)](npc-location-tag-split.md) - tags.locations is now the only location field — but pre-unification campaigns still carry the legacy split and need a one-time migration.
 * [Extractor output silently vanishes on the wrong wrapper key](wrapped-vs-unwrapped-merge.md) - The merge branches on filename and key name; a mismatch drops the entities with no error, and the whole loop swallows exceptions.
 * [The extraction schema is not the runtime schema](extraction-vs-runtime-schema.md) - Extractor output and the live campaign files share filenames and differ in fields — validating one against the other corrupts both.
+* [A wrapper with no verb writes whatever it is handed](verbless-wrappers-write-anything.md) - gm-note.sh and gm-time.sh read their first positional as data, so a typo, a stray flag or an unset variable went to permanent state printing [SUCCESS] and exiting 0.
 * [The open/flat character-shape trap](identity-onboarding-schema-drift.md) - Builders work in the open shape, disk holds flat — asserting one against the other's home has produced a duplicate validator and a long-lived red test.
-
+* [This pytest prints no tally line, and a piped run will let a red commit through](running-the-suite.md) - The suite aborts on a collection error, reports no summary, and silently commits on failure if chained behind a pipe.

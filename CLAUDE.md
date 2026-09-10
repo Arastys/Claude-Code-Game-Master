@@ -171,6 +171,12 @@ only for operational lessons that fit nowhere else.
 
 ## Technical Notes
 - **Python:** always `uv run python` (never bare `python`/`python3`).
+- **Tests:** `uv run python -m pytest -q --continue-on-collection-errors` — the flag is
+  required (a POSIX-only call in one test aborts collection on Windows), this pytest
+  prints **no tally line** so count `^FAILED ` lines rather than inferring, and never
+  chain a commit behind a piped run (`pytest … | tail && git commit` commits on
+  failure). Baseline 854 passing / 31 failing, all environmental. See
+  [gotchas/running-the-suite](docs/gotchas/running-the-suite.md).
 - **Saves:** JSON snapshots in each campaign's `saves/`.
 - **Multi-campaign:** tools read `world-state/active-campaign.txt`.
 - **Architecture:** bash wrappers (`tools/`) → Python managers (`lib/`) → per-campaign `world-state/campaigns/<name>/*.json`. The generic core is `game_core.py`; the per-book ruleset is `world_kit.py` (`ruleset.json`).
