@@ -313,13 +313,17 @@ Expected: the first two fail — the additions are destroyed and rollback report
 In `lib/consequence_manager.py`, the tick's write currently ends:
 
 ```python
+        if expired or fired:
+            ...                                   # provenance, snapshot, etc.
             self.json_ops.save_json(self.consequences_file, data)
         return {
 ```
 
-Insert an `elif` between the `if` block's end and the `return`:
+Insert an `elif` between that block's end and the `return`, so it reads:
 
 ```python
+        if expired or fired:
+            ...                                   # unchanged
             self.json_ops.save_json(self.consequences_file, data)
         elif data.get('_snapshot'):
             # A tick that fires nothing is not a beat. Leaving the previous
